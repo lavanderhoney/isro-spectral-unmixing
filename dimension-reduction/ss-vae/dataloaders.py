@@ -26,34 +26,34 @@ print("Image extracted and denoised.")
 s = 5 # neighorhood size. So seq lenght = sxs
 
 
-def extract_sequences(data_cube: torch.Tensor, s: int = 5) -> torch.Tensor:
+def extract_patches(data_cube: torch.Tensor, s: int = 5) -> torch.Tensor:
     B, H, W = data_cube.shape
     
     #add batch dimension for torch.nn.functional.unfold
     data_cube = data_cube.unsqueeze(0) # (1, B, H, W), consistent with (batch, channel, *)
     
     #use PyTorch's unfold to extract patches, rather than manually iterating, which is dumb and slow
-    sequences = F.unfold(data_cube, kernel_size=(s, s), stride=1).squeeze(0) # (B *(s*s), N)
-    N = sequences.shape[-1] # number of patches
+    patches = F.unfold(data_cube, kernel_size=(s, s), stride=1).squeeze(0) # (B *(s*s), N)
+    N = patches.shape[-1] # number of patches
     
     # transpose and reshape to get patches in the shape (N, B, s, s)
-    sequences = sequences.permute(0, 1).reshape(N, B, s, s)
-    return sequences
+    patches = patches.permute(0, 1).reshape(N, B, s, s)
+    return patches
 
-sequences = extract_sequences(torch.Tensor(refl_data), s)
-print("Sequences extracted:", sequences.shape)
+patches = extract_patches(torch.Tensor(refl_data), s)
+print("patches extracted:", patches.shape)
 # %%
 
-sequences_train, sequences_test = train_test_split(sequences.numpy(), test_size=0.2, random_state=42)
+patches_train, patches_test = train_test_split(patches.numpy(), test_size=0.2, random_state=42)
 
-mean = sequences_train.mean(axis=(0, 2, 3), keepdims=True) #these are numpy's methods
-std = sequences_train.std(axis=(0, 2, 3), keepdims=True) + 1e-8
+mean = patches_train.mean(axis=(0, 2, 3), keepdims=True) #these are numpy's methods
+std = patches_train.std(axis=(0, 2, 3), keepdims=True) + 1e-8
 
-sequences_train_n = (sequences_train - mean) / std
-sequences_test_n = (sequences_test - mean) / std
+patches_train_n = (patches_train - mean) / std
+patches_test_n = (patches_test - mean) / std
 
 #%%
-class SequentialDataset(Dataset):
+class SSVAEDataset(Dataset):
     def __init__(self, patches: np.ndarray, patch_size: int =5):
         self.patches = torch.Tensor(patches)
         self.s = patch_size
@@ -69,25 +69,28 @@ class SequentialDataset(Dataset):
         # 3) Permute so that spatial dims come first, spectral last:
         #    (B, s, s) → (s, s, B)
         patch = patch.permute(1, 2, 0)             # (s, s, B)
+        
+        return patch  # shape = (s, s, B)
 
-        # 4) Flatten the s×s spatial grid into sequence length s^2:
-        #    → (s*s, B)
-        # this is compatible with the LSTM input shape
-        seq = patch.reshape(self.s * self.s, self.B)
-
-        return seq  # shape = (s^2, B)
-
-sequences_data_train = SequentialDataset(sequences_train_n, s)
-sequences_data_test = SequentialDataset(sequences_test_n, s)
+patched_data_train = SSVAEDataset(patches_train_n, s)
+patched_data_test = SSVAEDataset(patches_test_n, s)
 
 def get_dataloaders(batch_size: int = 32):
-    train_loader = DataLoader(sequences_data_train, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(sequences_data_test, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(patched_data_train, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(patched_data_test, batch_size=batch_size, shuffle=False)
     return train_loader, test_loader
 
+# %%
 if __name__ == "__main__":
     train_loader, test_loader = get_dataloaders(batch_size=32)
     for batch in train_loader:
-        print("Batch shape:", batch.shape)  # Should be (batch_size, B, s, s)
+        print("Batch shape:", batch.shape)  # (batch_size, s, s, B)
         break
+
+
 # %%
+"""
+this should be the general dataset loader, except make the dl return s,s,B
+then, for each of three different models, they will transform this data into their shape, during the forward pass
+so, need to write utility functions that do these transformations
+"""
