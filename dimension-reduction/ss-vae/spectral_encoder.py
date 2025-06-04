@@ -8,6 +8,7 @@ The encoder architecture is from the fc-vae, so when that is implemented from ka
 """
 import torch
 import torch.nn as nn
+from typing import Tuple
 
 class SpectralEncoder(nn.Module):
     def __init__(self, n_bands:int, ld:int, hidden_dim: int) -> None:
@@ -16,7 +17,7 @@ class SpectralEncoder(nn.Module):
         self.ld = ld
         self.hidden_dim = hidden_dim
         # Encoder layers
-        self.enc_linear1 = nn.Linear(self.n_bands, self.hidden_dim)
+        self.enc_linear1 = nn.Linear(in_features=self.n_bands, out_features=self.hidden_dim)
         self.enc_ln1 = nn.LayerNorm(self.hidden_dim)
         self.enc_act1 = nn.LeakyReLU()
         self.enc_linear2 = nn.Linear(self.hidden_dim, self.hidden_dim)
@@ -29,7 +30,7 @@ class SpectralEncoder(nn.Module):
         self.mean_fc = nn.Linear(self.hidden_dim, self.ld//2)
         self.log_var = nn.Linear(self.hidden_dim, self.ld)
 
-    def encode(self, x):
+    def encode(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # First block
         x = self.enc_linear1(x)
         x = self.enc_ln1(x)
@@ -54,15 +55,14 @@ class SpectralEncoder(nn.Module):
         log_var = self.log_var(x)
         return mean, log_var
 
-    def sample(self, mean, log_var):
-        std = torch.exp(0.5 * log_var)
-        epsilon = torch.randn_like(std)
-        z = std * epsilon + mean
-        return z
+    # def sample(self, mean: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
+    #     std = torch.exp(0.5 * log_var)
+    #     epsilon = torch.randn_like(std)
+    #     z = std * epsilon + mean
+    #     return z
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # Encoder part
         mean, log_var = self.encode(x)
         # z = self.sample(mean, log_var)
-      
         return mean, log_var

@@ -45,4 +45,3 @@ class SequentialSensingNet(nn.Module):
 # lstm = SequentialSensingNet(109, 5, 12, 3)
 # out = lstm(x)
 # print(out.shape)
-
