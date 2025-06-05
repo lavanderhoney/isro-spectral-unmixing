@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 from skimage.restoration import denoise_tv_chambolle
+from typing import Tuple
 
 """
 Data downloaded using this script: https://www.kaggle.com/code/milapp180/fc-vae-iirs-dim-reduction
@@ -17,13 +18,13 @@ noisy_refl_data = unloaded['refl_data']
 wavelengths = unloaded['wavelengths']
 
 #---- denoise the reflectance data. ----# # not storing denoised data, so that we can change the denoising method here later
-refl_data = denoise_tv_chambolle(noisy_refl_data, max_num_iter=50, weight=20)
+refl_data: np.ndarray = denoise_tv_chambolle(noisy_refl_data, max_num_iter=50, weight=20)
 print("Image extracted and denoised.")
 
-
+spectral_bands = refl_data.shape[0]
 # %% 
 #---- normalize and create batched sequence data for the LSTM ----#
-s = 5 # neighorhood size. So seq lenght = sxs
+neighborhood_size = 5 # s So seq lenght = sxs
 
 
 def extract_patches(data_cube: torch.Tensor, s: int = 5) -> torch.Tensor:
@@ -40,11 +41,11 @@ def extract_patches(data_cube: torch.Tensor, s: int = 5) -> torch.Tensor:
     patches = patches.permute(0, 1).reshape(N, B, s, s)
     return patches
 
-patches = extract_patches(torch.Tensor(refl_data), s)
+patches = extract_patches(torch.Tensor(refl_data), neighborhood_size)
 print("patches extracted:", patches.shape)
 # %%
 
-patches_train, patches_test = train_test_split(patches.numpy(), test_size=0.2, random_state=42)
+patches_train, patches_test = train_test_split(patches.numpy(), test_size=0.1, random_state=42)
 
 mean = patches_train.mean(axis=(0, 2, 3), keepdims=True) #these are numpy's methods
 std = patches_train.std(axis=(0, 2, 3), keepdims=True) + 1e-8
@@ -72,10 +73,10 @@ class SSVAEDataset(Dataset):
         
         return patch  # shape = (s, s, B)
 
-patched_data_train = SSVAEDataset(patches_train_n, s)
-patched_data_test = SSVAEDataset(patches_test_n, s)
+patched_data_train = SSVAEDataset(patches_train_n, neighborhood_size)
+patched_data_test = SSVAEDataset(patches_test_n, neighborhood_size)
 
-def get_dataloaders(batch_size: int = 32):
+def get_dataloaders(batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
     train_loader = DataLoader(patched_data_train, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(patched_data_test, batch_size=batch_size, shuffle=False)
     return train_loader, test_loader

@@ -28,8 +28,8 @@ class SpatialSpectralEncoder(nn.Module):
         self.local_spatial_sensing = LocalSensingNet(self.n_bands, self.s, self.ld, self.cnn_layers)
         self.sequential_spatial_sensing = SequentialSensingNet(self.n_bands, self.s, self.ld, self.lstm_layers)
         
-        self.homology_loss_term = 0.0
-        self.kl_loss_term = 0.0
+        self.homology_loss_term: torch.Tensor
+        self.kl_loss_term: torch.Tensor
 
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -117,10 +117,10 @@ class SpatialSpectralNet(nn.Module):
     
 # %%
 
-#testing
-x = torch.randn(32, 5, 5, 109)
-ld=12
-net = SpatialSpectralNet(x.shape[-1], x.shape[1],ld, hidden_dim=64)
-out = net(x)
-print("output: ", out.shape)
+# #testing
+# x = torch.randn(32, 5, 5, 109)
+# ld=12
+# net = SpatialSpectralNet(x.shape[-1], x.shape[1],ld, hidden_dim=64)
+# out = net(x)
+# print("output: ", out.shape)
 # %%
