@@ -77,8 +77,8 @@ patched_data_train = SSVAEDataset(patches_train_n, neighborhood_size)
 patched_data_test = SSVAEDataset(patches_test_n, neighborhood_size)
 
 def get_dataloaders(batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
-    train_loader = DataLoader(patched_data_train, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(patched_data_test, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(patched_data_train, batch_size=batch_size, shuffle=True, pin_memory=True)
+    test_loader = DataLoader(patched_data_test, batch_size=batch_size, shuffle=False, pin_memory=True)
     return train_loader, test_loader
 
 # %%
