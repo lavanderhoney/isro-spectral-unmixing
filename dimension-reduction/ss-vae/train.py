@@ -7,13 +7,6 @@ import math
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from torch.profiler import (
-    profile,
-    record_function,
-    ProfilerActivity,
-    schedule,
-    tensorboard_trace_handler
-)
 #%%
 #--------- TO-DO -----------
 # implement parser thing, which takes parameters input from user in CLI, just like in the dade wood's repo
@@ -64,15 +57,6 @@ test_recon_loss = []
 test_kl_loss = []
 test_homology_loss = []
 
-# 2) Set up profiler
-profiler = profile(
-    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-    schedule=schedule(wait=1, warmup=1, active=3, repeat=1),
-    on_trace_ready=tensorboard_trace_handler("./profiler_logs"),
-    record_shapes=True,
-    with_stack=True
-)
-
 for epoch in range(n_epochs):
     
     # TRAINING
@@ -86,7 +70,7 @@ for epoch in range(n_epochs):
     train_pbar = tqdm(train_dl, total=len(train_dl), desc=f"Epoch {epoch+1}/{n_epochs} [Train]")
 
     for i, x in enumerate(train_pbar):
-        x = x.float().to(device, non_blocking=True)
+        x = x.float().to(device)
         
         optimizer.zero_grad()
         
@@ -116,8 +100,6 @@ for epoch in range(n_epochs):
             })
             if math.isnan(loss.item()):
                 raise ValueError("Loss went to nan.")
-        profiler.step() 
-    profiler.stop()
     avg_train_loss = epoch_train_loss / len(train_dl)
     avg_train_recon_loss = epoch_train_recon_loss / len(train_dl)
     avg_train_kl_loss = epoch_train_kl_loss / len(train_dl)
@@ -136,7 +118,7 @@ for epoch in range(n_epochs):
     epoch_test_homology_loss = 0.0
     test_pbar = tqdm(test_dl, total=len(test_dl), desc=f"Epoch {epoch+1}/{n_epochs} [Eval ]")
     for x in test_pbar:
-        x=x.float().to(device, non_blocking=True)
+        x=x.float().to(device)
         with torch.inference_mode():
             recon = model(x)
             input_spectra = extract_spectral_data(x)
