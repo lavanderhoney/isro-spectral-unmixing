@@ -135,8 +135,8 @@ if __name__ == "__main__":
     
     kmeans_labels = kmeans_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
     print("KMeans clustering completed.", kmeans_labels.shape)
-    dbscan_labels, n_clusters = dbscan_clustering(X_flat, rows=rows, cols=cols, radius=1.0)
-    print("DBSCAN clustering completed.")
+    # dbscan_labels, n_clusters = dbscan_clustering(X_flat, rows=rows, cols=cols, radius=0.8)
+    # print("DBSCAN clustering completed.")
     #%%
     # hierarchical_labels = hierarchical_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
     gmm_labels = gmm_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     #%%
     # Plot and evaluate each clustering result
     plot_and_eval(H_t, 4, kmeans_labels, "KMeans")
-    plot_and_eval(H_t, n_clusters, dbscan_labels, "DBSCAN")
+    # plot_and_eval(H_t, n_clusters, dbscan_labels, "DBSCAN")
     #%%
     # plot_and_eval(H_t, 4, hierarchical_labels, "Hierarchical Clustering")
     plot_and_eval(H_t, 4, gmm_labels, "GMM")
