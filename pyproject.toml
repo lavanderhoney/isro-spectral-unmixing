@@ -1,0 +1,16 @@
+[project]
+name = "isro_spectral_unmixing"
+version = "0.1.0"
+description = "HSI spectral unmixing project files"
+authors = [
+  { name="lavanderhoney", email="milapp857@gmail.com" }
+]
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["mineral_analysis", "dimension_reduction"]
+package-dir = {"" = "src"}
