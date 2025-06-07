@@ -19,20 +19,23 @@ def main():
     config = get_config()   
     metrics = MetricsLogger()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     train_dl, test_dl = get_dataloaders(config.batch_size) 
-
     print("Dataloaders created !")
+    
     model = SpatialSpectralNet(
         train_dl.dataset.__getattribute__('B'),  # number of spectral bands
         config.patch_size,  
         config.latent_dim,
-        config.hidden_dim
+        config.hidden_dim,
+        config.lstm_layers,
+        config.cnn_layers,
+        config.free_bits
     ).to(device)
-
+    # Wrap in torch.compile for PyTorch 2.0+ graph optimizations
+    model = torch.compile(model)  
     print("The Training Begins !")
     sleep(0.5)
-
-    early_stop_patience=config.early_stop
 
     optimizer = optim.Adam(model.parameters(), lr=config.lr)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=config.scheduler_patience, threshold=0.01)

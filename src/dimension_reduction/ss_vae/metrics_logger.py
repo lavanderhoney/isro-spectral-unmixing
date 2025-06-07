@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Literal
+from typing import Literal, Optional, Union
 class MetricsLogger:
     def __init__(self) -> None:
         """
@@ -26,7 +26,7 @@ class MetricsLogger:
             'val': {'total': 0.0, 'recon': 0.0, 'kl': 0.0, 'homology': 0.0, 'count': 0}
         }
     
-    def update(self, phase: Literal['train', 'val'], total: float, recon: float, kl: float, homology: float) -> None:
+    def update(self, phase: Literal['train', 'val'], total: float, recon: float, kl: float, homology: Optional[float]=None) -> None:
         """
         Updates the metrics for the current epoch, in the `self.epoch_metrics` dict.
         This method accumulates the losses for the specified phase ('train' or 'val').
@@ -42,7 +42,8 @@ class MetricsLogger:
         metrics['total'] += total
         metrics['recon'] += recon
         metrics['kl'] += kl
-        metrics['homology'] += homology
+        if homology:
+            metrics['homology'] += homology
         metrics['count'] += 1
     
     def finalize_epoch(self, phase: Literal['train', 'val']) -> float:
@@ -59,7 +60,8 @@ class MetricsLogger:
         self.history[phase]['total'].append(metrics['total'] / count)
         self.history[phase]['recon'].append(metrics['recon'] / count)
         self.history[phase]['kl'].append(metrics['kl'] / count)
-        self.history[phase]['homology'].append(metrics['homology'] / count)
+        if 'homology' in metrics:
+            self.history[phase]['homology'].append(metrics['homology'] / count)
         return self.history[phase]['total'][-1]
     
     def get_latest(self, phase):
