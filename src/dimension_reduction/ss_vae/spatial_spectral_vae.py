@@ -7,11 +7,11 @@ This file will include the complete forward pass of the model.
 # %%
 import torch
 import torch.nn as nn
-from spectral_encoder import SpectralEncoder
-from local_sensing import LocalSensingNet
-from sequential_sensing import SequentialSensingNet
-from utils import extract_sequential_data, extract_spectral_data
-from loss import homology_loss, kl_loss, reconstruction_loss
+from .spectral_encoder import SpectralEncoder
+from .local_sensing import LocalSensingNet
+from .sequential_sensing import SequentialSensingNet
+from .utils import extract_sequential_data, extract_spectral_data
+from .loss import homology_loss, kl_loss, reconstruction_loss
 
 class SpatialSpectralEncoder(nn.Module):
     def __init__(self, n_bands: int, patch_size: int, ld: int, hidden_dim: int, lstm_layers: int=3, cnn_layers: int =3, free_bits: float =0.0):

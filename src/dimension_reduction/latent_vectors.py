@@ -10,7 +10,7 @@ import torch
 import numpy as np
 from typing import Literal 
 from mineral_analysis.endmember_extraction import extract_endmembers
-from ss_vae.spatial_spectral_vae import SpatialSpectralNet
+from .ss_vae.spatial_spectral_vae import SpatialSpectralNet
 # from vae.vae import VAE
 def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str, input_data: np.ndarray) -> np.ndarray:
     """
