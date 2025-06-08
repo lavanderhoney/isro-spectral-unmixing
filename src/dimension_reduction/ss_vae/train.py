@@ -129,4 +129,4 @@ if __name__ == "__main__":
     timestamp = datetime.now().strftime("%m%d_%H%M%S")
     os.makedirs("model", exist_ok=True)
     #save the model
-    torch.save(model, f"models/model_ss_vae_{timestamp}.pth")
+    torch.save(model.state_dict(), f"models/model_state_ss_vae_{timestamp}.pth")

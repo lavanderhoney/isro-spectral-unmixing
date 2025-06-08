@@ -13,6 +13,10 @@ from typing import Literal
 from mineral_analysis.endmember_extraction import extract_endmembers
 from dimension_reduction.vae.vae import VAE  
 from sklearn.preprocessing import MinMaxScaler
+from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
+from dimension_reduction.ss_vae.spectral_encoder import SpectralEncoder
+from dimension_reduction.ss_vae.local_sensing import LocalSensingNet
+from dimension_reduction.ss_vae.sequential_sensing import SequentialSensingNet
 
 def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str, input_data: np.ndarray) -> np.ndarray:
     """
@@ -26,13 +30,27 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
     Returns:
     - np.ndarray: Latent vectors extracted from the model.
     """
-    model = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
-    model.eval()  # Set the model to evaluation mode
+     # Set the model to evaluation mode
     input_tensor = torch.from_numpy(input_data).float()
     if model_name == 'ss-vae':
-        sampled_mean, revised_mean, log_var = model.encoder(input_tensor) 
+        state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+        model_ss = SpatialSpectralNet(
+            n_bands=109,
+            patch_size=5,
+            ld=12,
+            hidden_dim=64,
+            lstm_layers=3,
+            cnn_layers=3,
+            free_bits=0.1
+        )
+        model_ss.load_state_dict(state_dict)
+        model_ss.eval()  # Set the model to evaluation mode
+        with torch.no_grad():
+            sampled_mean, revised_mean, log_var = model_ss.encoder(input_tensor) 
         latent_vector = revised_mean
     elif model_name =='vae':
+        model = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
+        model.eval()
         mean, log_var, _ = model(input_tensor)
         latent_vector = mean  # Use the mean as the latent vector
     latent_vectors = latent_vector.detach().numpy()  # Convert to numpy array and detach from the computation graph
