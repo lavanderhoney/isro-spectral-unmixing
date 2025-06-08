@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
-
-def plot_losses(metrics, save_path=None):
+from datetime import datetime
+def plot_losses(metrics, save_path="src/dimension_reduction/ss_vae/training_runs"):
     phases = ['train', 'val']
     loss_types = ['total', 'recon', 'kl', 'homology']
     
@@ -16,6 +16,8 @@ def plot_losses(metrics, save_path=None):
         axs[i].legend()
         axs[i].grid(True)
     
+    timestamp = datetime.now().strftime("%m%d_%H%M%S")
+    save_path = f"{save_path}_loss_plot_{timestamp}.png"
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path)

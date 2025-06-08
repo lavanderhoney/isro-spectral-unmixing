@@ -11,15 +11,19 @@ Data downloaded using this script: https://www.kaggle.com/code/milapp180/fc-vae-
 It is noisy reflectance data, of shape 109 x 1001 x 250, with: B x H x W
 """
 # %%
-refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'
+# refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'
 
+# unloaded = np.load(refl_cube_path)
+# noisy_refl_data = unloaded['refl_data']
+# wavelengths = unloaded['wavelengths']
+
+# #---- denoise the reflectance data. ----# # not storing denoised data, so that we can change the denoising method here later
+# refl_data: np.ndarray = denoise_tv_chambolle(noisy_refl_data, max_num_iter=50, weight=20)
+refl_cube_path = 'data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
 unloaded = np.load(refl_cube_path)
-noisy_refl_data = unloaded['refl_data']
+refl_data = unloaded['den_refl_data']
 wavelengths = unloaded['wavelengths']
-
-#---- denoise the reflectance data. ----# # not storing denoised data, so that we can change the denoising method here later
-refl_data: np.ndarray = denoise_tv_chambolle(noisy_refl_data, max_num_iter=50, weight=20)
-print("Image extracted and denoised.")
+print("Denoised image extracted!")
 
 spectral_bands = refl_data.shape[0]
 # %% 
@@ -87,6 +91,8 @@ if __name__ == "__main__":
     for batch in train_loader:
         print("Batch shape:", batch.shape)  # (batch_size, s, s, B)
         break
+    # np.savez_compressed('den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz', den_refl_data=refl_data, wavelengths=wavelengths)
+    # print("Denoised reflectance data saved to 'den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'")
 
 
 # %%

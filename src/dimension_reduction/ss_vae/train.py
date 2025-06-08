@@ -1,10 +1,10 @@
 from time import sleep
-from .config import get_config # import config from the same directory
-from .metrics_logger import MetricsLogger
-from .spatial_spectral_vae import SpatialSpectralNet
-from .dataloaders import get_dataloaders, spectral_bands, neighborhood_size
-from .visualization import plot_losses
-from .utils import extract_spectral_data
+from dimension_reduction.ss_vae.config import get_config # import config from the same directory
+from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
+from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders
+from dimension_reduction.ss_vae.visualization import plot_losses
+from dimension_reduction.ss_vae.utils import extract_spectral_data
 from tqdm import tqdm
 import math
 import torch
@@ -22,7 +22,7 @@ def main():
     
     train_dl, test_dl = get_dataloaders(config.batch_size) 
     print("Dataloaders created !")
-    
+    #%%
     model = SpatialSpectralNet(
         train_dl.dataset.__getattribute__('B'),  # number of spectral bands
         config.patch_size,  
@@ -119,11 +119,12 @@ def main():
         if patience_cntr >= config.early_stop:
             print(f"Early stopping triggered at epoch: {epoch}")
             break
-    plot_losses(metrics, 'loss_plots.png')
+    plot_losses(metrics, 'ssvae_loss_plots')
     return model, best_model_state, metrics
-
+#%%
 if __name__ == "__main__":
     model, best_model_statem, metrics = main()
-    
+    import os
+    os.makedirs("model", exist_ok=True)
     #save the model
     torch.save(model, "models/model_ss_vae.pth")

@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import math
 from time import sleep
 from dimension_reduction.ss_vae.config import get_config
 from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
@@ -17,16 +18,11 @@ def main():
     It loads the data, preprocesses it, initializes the model, and runs the training loop.
     """
     # Load and preprocess the reflectance data
-    print("Loading and preprocessing reflectance data...")
-    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #same src as in ss-vae
-
+    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
     unloaded = np.load(refl_cube_path)
-    noisy_refl_data = unloaded['refl_data']
+    refl_data = unloaded['den_refl_data']
     wavelengths = unloaded['wavelengths']
-
-    #---- denoise the reflectance data. ----# 
-    refl_data: np.ndarray = denoise_tv_chambolle(noisy_refl_data, max_num_iter=50, weight=20)
-    print("Image extracted and denoised.")
+    print("Denoised image extracted!")
 
     spectral_bands = refl_data.shape[0]
     H_t = np.moveaxis(refl_data, 0, 2)
@@ -85,13 +81,20 @@ def main():
             # clamp each dimension to at least free_bits
             kl_fb = torch.clamp(kl_pd, min=config.free_bits)
             kl_loss = kl_fb.sum(dim=1).mean()    
-            loss = recon_loss + config.beta * kl_loss
+            loss = recon_loss_term + config.beta * kl_loss
 
             loss.backward()
             optim.step()
 
             metrics.update('train', loss.item(), recon_loss_term.item(), kl_loss.item())
-            train_pbar.set_postfix(metrics.get_latest('train'))
+            if i % config.update_interval == 0:
+                train_pbar.set_postfix({
+                    "loss": "{:.4f}".format(loss.item()),
+                    "reconstruction": "{:.4f}".format(recon_loss_term.item()),
+                    "kl": "{:.4f}".format(kl_loss),
+                })
+                if math.isnan(loss.item()):
+                    raise ValueError("Loss went to nan.")
 
         # EVALUATION
         model.eval()
@@ -109,10 +112,15 @@ def main():
             # clamp each dimension to at least free_bits
                 kl_fb = torch.clamp(kl_pd, min=config.free_bits)
                 kl_loss = kl_fb.sum(dim=1).mean()    
-                loss = recon_loss + config.beta * kl_loss
+                loss = recon_loss_term + config.beta * kl_loss
 
                 metrics.update('val', loss.item(), recon_loss_term.item(), kl_loss.item())
-                test_pbar.set_postfix(metrics.get_latest('val'))
+                test_pbar.set_postfix({
+                    "loss": "{:.4f}".format(loss.item()),
+                    "reconstruction": "{:.4f}".format(recon_loss_term.item()),
+                    "kl": "{:.4f}".format(kl_loss.item()),
+                })
+
 
         avg_test_loss = metrics.finalize_epoch('val')
         scheduler.step(avg_test_loss)
@@ -124,15 +132,20 @@ def main():
         else:
             patience_cntr += 1
 
-        if patience_cntr >= config.patience:
+        if patience_cntr >= config.early_stop:
             print(f"Early stopping at epoch {epoch+1}")
             break
+    plot_losses(metrics, "vae_loss_plots")
     return model, best_model_state,  metrics.history    
 
 if __name__ == "__main__":
     model, best_model_state, history = main()
-    plot_losses(history)
+   
     print("Training complete. Best model state saved.")
     # Save the best model state if needed
-    torch.save(model, 'models/vae_model.pth')
-    print("Best model saved to 'models/best_vae_model.pth'.")
+    import os
+    from datetime import datetime
+    os.makedirs("models", exist_ok=True)
+    timestamp = datetime.now().strftime("%m%d_%H%M%S")
+    torch.save(model, f'models/vae_model_{timestamp}.pth')
+    print("Best model saved to 'models'.")
