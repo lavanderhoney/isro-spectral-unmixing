@@ -11,7 +11,9 @@ import torch
 import numpy as np
 from typing import Literal 
 from mineral_analysis.endmember_extraction import extract_endmembers
+from dimension_reduction.vae.vae import VAE  
 from sklearn.preprocessing import MinMaxScaler
+
 def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str, input_data: np.ndarray) -> np.ndarray:
     """
     Extract latent vectors from a model given the input data.
@@ -28,14 +30,16 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
     model.eval()  # Set the model to evaluation mode
     input_tensor = torch.from_numpy(input_data).float()
     if model_name == 'ss-vae':
-        latent_vector = model.encoder(input_tensor)
+        sampled_mean, revised_mean, log_var = model.encoder(input_tensor) 
+        latent_vector = revised_mean
     elif model_name =='vae':
         mean, log_var, _ = model(input_tensor)
-        latent_vector = model.sample(mean, log_var)
+        latent_vector = mean  # Use the mean as the latent vector
     latent_vectors = latent_vector.detach().numpy()  # Convert to numpy array and detach from the computation graph
-    scaler = MinMaxScaler()
-    latent_vectors_01 = scaler.fit_transform(latent_vectors)  # Normalize the latent vectors to [0, 1]
-    return latent_vectors_01 # Return the latent vectors as a numpy array
+    # scaler = MinMaxScaler()
+    # latent_vectors_01 = scaler.fit_transform(latent_vectors)  # Normalize the latent vectors to [0, 1]
+    return latent_vectors
+
 def extract_endmembers_from_latent(latent_vectors: np.ndarray, wavelengths: np.ndarray, algorithm: Literal['nfindr', 'vca', 'fippi', 'atgp'], rows: int, cols:int, n_endmembers: int = 4, ) -> np.ndarray:
     """    Extract endmembers from latent vectors using specified algorithm.
     Parameters:
@@ -71,7 +75,7 @@ if __name__ == "__main__":
     print("Latent vectors shape:", latent_vectors.shape)
     
     # Extract endmembers from the latent vectors
-    endmembers = extract_endmembers_from_latent(latent_vectors, wavelengths, algorithm='nfindr', rows=rows, cols=cols, n_endmembers=4, )
-    print("Endmembers shape:", endmembers.shape)
-    print("Endmembers:", endmembers)
+    # endmembers = extract_endmembers_from_latent(latent_vectors, wavelengths, algorithm='nfindr', rows=rows, cols=cols, n_endmembers=4, )
+    # print("Endmembers shape:", endmembers.shape)
+    # print("Endmembers:", endmembers)
 # %%

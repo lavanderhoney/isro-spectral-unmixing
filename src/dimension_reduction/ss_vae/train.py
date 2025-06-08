@@ -125,6 +125,8 @@ def main():
 if __name__ == "__main__":
     model, best_model_statem, metrics = main()
     import os
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%m%d_%H%M%S")
     os.makedirs("model", exist_ok=True)
     #save the model
-    torch.save(model, "models/model_ss_vae.pth")
+    torch.save(model, f"models/model_ss_vae_{timestamp}.pth")

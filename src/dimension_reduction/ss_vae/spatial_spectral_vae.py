@@ -7,6 +7,7 @@ This file will include the complete forward pass of the model.
 # %%
 import torch
 import torch.nn as nn
+from typing import Tuple
 from .spectral_encoder import SpectralEncoder
 from .local_sensing import LocalSensingNet
 from .sequential_sensing import SequentialSensingNet
@@ -32,7 +33,7 @@ class SpatialSpectralEncoder(nn.Module):
         self.kl_loss_term: torch.Tensor
 
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         forward pass through all three nets, and return the sampled, concatenated latent vector.\n
         also computes the homology and kl loss terms \n
@@ -58,7 +59,7 @@ class SpatialSpectralEncoder(nn.Module):
         epsilon = torch.randn_like(std)
         latent_vector = std * epsilon + revised_mean # (batch, ld)
         
-        return latent_vector
+        return latent_vector, revised_mean, log_var
 
 class SpatialSpectralDecoder(nn.Module):
     def __init__(self, n_bands:int, ld: int, hidden_dim: int) -> None:
@@ -111,7 +112,7 @@ class SpatialSpectralNet(nn.Module):
         """
         x: (batch_size, s, s, B)
         """
-        z = self.encoder(x)
+        z, mean, log_var = self.encoder(x)
         return self.decoder(z)
     
     
