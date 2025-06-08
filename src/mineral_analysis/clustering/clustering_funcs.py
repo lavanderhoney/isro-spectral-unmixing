@@ -13,7 +13,8 @@ from matplotlib import colors as mcolors
 from sklearn.preprocessing import StandardScaler
 from dimension_reduction.latent_vectors import extract_latent_vectors
 import argparse
-
+# import matplotlib
+# matplotlib.use('TkAgg')
 #%%
 def kmeans_clustering(X: np.ndarray, n_clusters: int, rows: int, cols: int):
     fkmeans = faiss.Kmeans(d=X.shape[1],
@@ -54,7 +55,7 @@ def silhouette_coefficient(cluster_index, samples) -> float:
     # and far away from the other clusters. The worst value is -1. Values near 0 denote overlapping clusters.
     return s.mean()
 
-def plot_and_eval(H, k, labels_image, algorithm_name, img_type: Literal['original', 'latent']='original'):
+def plot_and_eval(H, k, labels_image, algorithm_name,img_type: Literal['original', 'latent']='original'):
     """
     Plot the clustering results overlay and evaluate using silhouette score.
     """
@@ -64,23 +65,35 @@ def plot_and_eval(H, k, labels_image, algorithm_name, img_type: Literal['origina
     ][:k]
     cmap = mcolors.ListedColormap(colors)
 
+    # Compute effective dimensions from label length
+    effective_rows, effective_cols = 997, 246 #change to make it dynamic with patch size
+
     # Create an RGB image from cluster labels
-    cluster_image = labels_image.reshape(H.shape[1], H.shape[2])
+    cluster_image = labels_image.reshape(effective_rows, effective_cols)
     rgb_image = cmap(cluster_image / (k - 1))[:, :, :3]  # Drop alpha channel
 
-    # Normalize a grayscale band (e.g., band 30)
+    # Normalize a grayscale band (e.g., band 30) — original resolution
     gray_band = H[30, :, :]
     gray_norm = (gray_band - gray_band.min()) / (gray_band.max() - gray_band.min())
-    print(gray_norm.shape)
-    alpha = 0.5  # 0 = original only, 1 = cluster overlay only
-    overlay = (1 - alpha) * np.stack([gray_norm]*3, axis=2) + alpha * rgb_image
-    
+
+    rows, cols = H.shape[1], H.shape[2]
+    # Center crop grayscale to match effective size
+    start_r = (rows - effective_rows) // 2
+    start_c = (cols - effective_cols) // 2
+    gray_cropped = gray_norm[start_r:start_r + effective_rows, start_c:start_c + effective_cols]
+    print("Gray cropped shape:", gray_cropped.shape)
+    # Overlay grayscale and cluster colors
+    alpha = 0.5
+    overlay = (1 - alpha) * np.stack([gray_cropped] * 3, axis=2) + alpha * rgb_image
+
+    # Plot
     plt.figure(figsize=(5, 10))
     plt.imshow(overlay)
     plt.title(f"{img_type} {algorithm_name} Clustering Results (k={k})")
     plt.axis('off')
     plt.show()
-      
+    plt.savefig(f"{img_type}_{algorithm_name}_clustering_k{k}.png", bbox_inches='tight')
+
     return rgb_image
 
 if __name__ == "__main__":
@@ -109,11 +122,11 @@ if __name__ == "__main__":
     H_t = H_t.astype('float32')
     rows, cols, bands = H_t.shape
     X_flat = H_t.reshape(rows*cols, bands)
-    
-    kmeans_labels, score = kmeans_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
-    print("KMeans clustering completed.", kmeans_labels.shape)
-    print("Silhouette Score:", score)
-    plot_and_eval(H, 4, kmeans_labels, "KMeans")
+    print("Data loaded and reshaped:", X_flat.shape)
+    # kmeans_labels, score = kmeans_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
+    # print("KMeans clustering completed.", kmeans_labels.shape)
+    # print("Silhouette Score:", score)
+    # plot_and_eval(H, 4, kmeans_labels, "KMeans")
     
     
 #%%
@@ -122,34 +135,34 @@ if __name__ == "__main__":
     # plot_and_eval(H, 4, gmm_labels, "GMM")
 
 #%%
-    scaler = StandardScaler()
-    X_flat_norm = scaler.fit_transform(X_flat)
-    latent_vectors = extract_latent_vectors('vae', '/teamspace/studios/this_studio/isro-spectral-unmixing/models/vae_model_0608_102826.pth', X_flat_norm)
-    print("Latent vectors extracted.", latent_vectors.shape)
+#     scaler = StandardScaler()
+#     X_flat_norm = scaler.fit_transform(X_flat)
+#     latent_vectors = extract_latent_vectors('vae', '/teamspace/studios/this_studio/isro-spectral-unmixing/models/vae_model_0608_102826.pth', X_flat_norm)
+#     print("Latent vectors extracted.", latent_vectors.shape)
     
-    latent_kmeans_labels, score = kmeans_clustering(latent_vectors, n_clusters=4, rows=rows, cols=cols)
-    print("KMeans clustering on latent vectors completed.", latent_kmeans_labels.shape)
-    print("Silhouette Score for latent vectors:", score)
-    __ = plot_and_eval(H, 4, latent_kmeans_labels, "KMeans Latent", img_type='latent')
+#     latent_kmeans_labels, score = kmeans_clustering(latent_vectors, n_clusters=4, rows=rows, cols=cols)
+#     print("KMeans clustering on latent vectors completed.", latent_kmeans_labels.shape)
+#     print("Silhouette Score for latent vectors:", score)
+#     __ = plot_and_eval(H, 4, latent_kmeans_labels, "KMeans Latent", img_type='latent')
 
-#%%
-    latent_kmeans_labels, score = kmeans_clustering(latent_vectors, n_clusters=2, rows=rows, cols=cols)
-    print("KMeans clustering on latent vectors completed.", latent_kmeans_labels.shape)
-    print("Silhouette Score for latent vectors (k=2):", score)
-    __ = plot_and_eval(H, 2, latent_kmeans_labels, "KMeans Latent", img_type='latent')
+# #%%
+#     latent_kmeans_labels, score = kmeans_clustering(latent_vectors, n_clusters=2, rows=rows, cols=cols)
+#     print("KMeans clustering on latent vectors completed.", latent_kmeans_labels.shape)
+#     print("Silhouette Score for latent vectors (k=2):", score)
+#     __ = plot_and_eval(H, 2, latent_kmeans_labels, "KMeans Latent", img_type='latent')
+    
+#     #%%
+#     latent_kmeans_labels, score = kmeans_clustering(latent_vectors, n_clusters=3, rows=rows, cols=cols)
+#     print("KMeans clustering on latent vectors completed.", latent_kmeans_labels.shape)
+#     print("Silhouette Score for latent vectors (k=3):", score)
+#     __ = plot_and_eval(H, 3, latent_kmeans_labels, "KMeans Latent", img_type='latent')
     
     #%%
-    latent_kmeans_labels, score = kmeans_clustering(latent_vectors, n_clusters=3, rows=rows, cols=cols)
-    print("KMeans clustering on latent vectors completed.", latent_kmeans_labels.shape)
-    print("Silhouette Score for latent vectors (k=3):", score)
-    __ = plot_and_eval(H, 3, latent_kmeans_labels, "KMeans Latent", img_type='latent')
-    
-    #%%
 
-    latent_vectors = extract_latent_vectors('ss-vae', '/teamspace/studios/this_studio/isro-spectral-unmixing/models/model_state_ss_vae_0608_183236.pth', X_flat_norm)
+    latent_vectors = extract_latent_vectors('ss-vae', '/teamspace/studios/this_studio/isro-spectral-unmixing/models/model_state_ss_vae_0608_183236.pth', X_flat)
     print("Latent vectors extracted.", latent_vectors.shape)
     
-    latent_kmeans_labels, score = kmeans_clustering(latent_vectors, n_clusters=4, rows=rows, cols=cols)
+    latent_kmeans_labels, score = kmeans_clustering(latent_vectors, n_clusters=4, rows=997, cols=246)
     print("KMeans clustering on latent vectors completed.", latent_kmeans_labels.shape)
     print("Silhouette Score for latent vectors:", score)
     __ = plot_and_eval(H, 4, latent_kmeans_labels, "KMeans Latent", img_type='latent')

@@ -10,9 +10,11 @@ import os
 import torch
 import numpy as np
 from typing import Literal 
+from torch.utils.data import DataLoader, TensorDataset
 from mineral_analysis.endmember_extraction import extract_endmembers
 from dimension_reduction.vae.vae import VAE  
 from sklearn.preprocessing import MinMaxScaler
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders
 from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
 from dimension_reduction.ss_vae.spectral_encoder import SpectralEncoder
 from dimension_reduction.ss_vae.local_sensing import LocalSensingNet
@@ -30,10 +32,17 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
     Returns:
     - np.ndarray: Latent vectors extracted from the model.
     """
+    print(">>> >Running latest extract_latent_vectors")
      # Set the model to evaluation mode
     input_tensor = torch.from_numpy(input_data).float()
     if model_name == 'ss-vae':
-        state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+        raw_state_dict = torch.load(model_path, map_location='cpu')
+
+        # Remove '_orig_mod.' prefix from all keys
+        cleaned_state_dict = {
+            k.replace("_orig_mod.", ""): v
+            for k, v in raw_state_dict.items()
+        }
         model_ss = SpatialSpectralNet(
             n_bands=109,
             patch_size=5,
@@ -43,20 +52,27 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
             cnn_layers=3,
             free_bits=0.1
         )
-        model_ss.load_state_dict(state_dict)
+        model_ss.load_state_dict(cleaned_state_dict)
         model_ss.eval()  # Set the model to evaluation mode
-        with torch.no_grad():
-            sampled_mean, revised_mean, log_var = model_ss.encoder(input_tensor) 
-        latent_vector = revised_mean
+        input_dl, _ = get_dataloaders(batch_size=input_data.shape[0], neighborhood_size=5, test_size=0)
+
+        latent_X = []
+        for batch in input_dl:
+            x=batch.float()
+            # print(x.shape)
+            with torch.inference_mode():
+                sampled_mean, revised_mean, log_var = model_ss.encoder(x)
+            print(revised_mean.shape)
+
+        latent_vector = revised_mean.detach().numpy()
     elif model_name =='vae':
         model = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
         model.eval()
         mean, log_var, _ = model(input_tensor)
-        latent_vector = mean  # Use the mean as the latent vector
-    latent_vectors = latent_vector.detach().numpy()  # Convert to numpy array and detach from the computation graph
+        latent_vector = mean.detach().numpy()  # Use the mean as the latent vector
     # scaler = MinMaxScaler()
     # latent_vectors_01 = scaler.fit_transform(latent_vectors)  # Normalize the latent vectors to [0, 1]
-    return latent_vectors
+    return latent_vector
 
 def extract_endmembers_from_latent(latent_vectors: np.ndarray, wavelengths: np.ndarray, algorithm: Literal['nfindr', 'vca', 'fippi', 'atgp'], rows: int, cols:int, n_endmembers: int = 4, ) -> np.ndarray:
     """    Extract endmembers from latent vectors using specified algorithm.
