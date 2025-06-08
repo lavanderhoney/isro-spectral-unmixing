@@ -19,7 +19,7 @@ It is noisy reflectance data, of shape 109 x 1001 x 250, with: B x H x W
 
 # #---- denoise the reflectance data. ----# # not storing denoised data, so that we can change the denoising method here later
 # refl_data: np.ndarray = denoise_tv_chambolle(noisy_refl_data, max_num_iter=50, weight=20)
-refl_cube_path = 'data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
+refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
 unloaded = np.load(refl_cube_path)
 refl_data = unloaded['den_refl_data']
 wavelengths = unloaded['wavelengths']
@@ -44,18 +44,24 @@ def extract_patches(data_cube: torch.Tensor, s: int = 5) -> torch.Tensor:
     # transpose and reshape to get patches in the shape (N, B, s, s)
     patches = patches.permute(0, 1).reshape(N, B, s, s)
     return patches
-
-patches = extract_patches(torch.Tensor(refl_data), neighborhood_size)
-print("patches extracted:", patches.shape)
 # %%
-
-patches_train, patches_test = train_test_split(patches.numpy(), test_size=0.1, random_state=42)
-
-mean = patches_train.mean(axis=(0, 2, 3), keepdims=True) #these are numpy's methods
-std = patches_train.std(axis=(0, 2, 3), keepdims=True) + 1e-8
-
-patches_train_n = (patches_train - mean) / std
-patches_test_n = (patches_test - mean) / std
+def split_norm_patches(patches: torch.Tensor,  test_size: float) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Splits the patches into training and test sets, normalizes them, and returns the normalized patches.
+    """
+    # Split into train and test sets
+    if test_size ==0: # used for inference, so no split
+        patches_train, patches_test = patches.numpy(), patches.numpy()
+        print(patches_train.shape, patches_test.shape)
+    else:
+        patches_train, patches_test = train_test_split(patches.numpy(), test_size=0.1, random_state=42)
+    # Normalize the patches
+    mean = patches_train.mean(axis=(0, 2, 3), keepdims=True)  # mean across (B, s, s)
+    std = patches_train.std(axis=(0, 2, 3), keepdims=True) + 1e-8  # std across (B, s, s)
+    patches_train_n = (patches_train - mean) / std
+    patches_test_n = (patches_test - mean) / std
+    
+    return patches_train_n, patches_test_n
 
 #%%
 class SSVAEDataset(Dataset):
@@ -77,10 +83,15 @@ class SSVAEDataset(Dataset):
         
         return patch  # shape = (s, s, B)
 
-patched_data_train = SSVAEDataset(patches_train_n, neighborhood_size)
-patched_data_test = SSVAEDataset(patches_test_n, neighborhood_size)
+def get_dataloaders(batch_size: int = 32, neighborhood_size: int=5, test_size: float=0.1) -> Tuple[DataLoader, DataLoader]:
+    
+    patches = extract_patches(torch.Tensor(refl_data), neighborhood_size)
+    print("patches extracted:", patches.shape)
 
-def get_dataloaders(batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
+    patches_train_n, patches_test_n = split_norm_patches(patches, test_size)
+    patched_data_train = SSVAEDataset(patches_train_n, neighborhood_size)
+    patched_data_test = SSVAEDataset(patches_test_n, neighborhood_size)
+
     train_loader = DataLoader(patched_data_train, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(patched_data_test, batch_size=batch_size, shuffle=False)
     return train_loader, test_loader
