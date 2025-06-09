@@ -36,8 +36,8 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
      # Set the model to evaluation mode
     input_tensor = torch.from_numpy(input_data).float()
     if model_name == 'ss-vae':
-        state = torch.load(model_path, map_location='cpu')
-        raw_state_dict = state['model_state_dict'] if 'model_state_dict' in state else state
+        state = torch.load(model_path, map_location='cpu', weights_only=False)
+        raw_state_dict = state['model_state'] if 'model_state' in state else state
 
         # Remove '_orig_mod.' prefix from all keys
         cleaned_state_dict = {
@@ -45,13 +45,13 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
             for k, v in raw_state_dict.items()
         }
         model_ss = SpatialSpectralNet(
-            n_bands=state['config']['n_bands'],
-            patch_size=state['config']['patch_size'],
-            ld=state['config']['ld'],
-            hidden_dim=state['config']['hidden_dim'],
-            lstm_layers=state['config']['lstm_layers'],
-            cnn_layers=state['config']['cnn_layers'],
-            free_bits=state['config']['free_bits'],
+            n_bands=input_data.shape[1],  # number of spectral bands
+            patch_size=state['config'].patch_size,  # patch size
+            ld=state['config'].latent_dim,
+            hidden_dim=state['config'].hidden_dim,
+            lstm_layers=state['config'].lstm_layers,
+            cnn_layers=state['config'].cnn_layers,
+            free_bits=state['config'].free_bits,
         )
         model_ss.load_state_dict(cleaned_state_dict)
         model_ss.eval()  # Set the model to evaluation mode
@@ -67,7 +67,7 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
 
         latent_vector = revised_mean.detach().numpy()
     elif model_name =='vae':
-        state = torch.load(model_path, map_location='cpu')
+        state = torch.load(model_path, map_location='cpu', weights_only=False)
         raw_state_dict = state['model_state_dict'] if 'model_state_dict' in state else state
 
         # Remove '_orig_mod.' prefix from all keys
@@ -77,8 +77,8 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
         }
         model_vae = VAE(
             input_dim=input_data.shape[1],  # n_bands
-            latent_dim=state['config']['latent_dim'],
-            hidden_dim=state['config']['hidden_dim'],
+            latent_dim=state['config'].atent_dim,
+            hidden_dim=state['config'].idden_dim,
         )
         model_vae.load_state_dict(cleaned_state_dict)
         model_vae.eval()

@@ -153,5 +153,5 @@ if __name__ == "__main__":
         'config': get_config(),
         'timestamp': timestamp
     }
-    torch.save(model, f'models/model_state_vae_{timestamp}.pth')
+    torch.save(state, f'models/model_state_vae_{timestamp}.pth')
     print("Best model saved to 'models'.")
