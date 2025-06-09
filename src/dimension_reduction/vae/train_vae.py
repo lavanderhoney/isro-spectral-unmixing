@@ -136,10 +136,10 @@ def main():
             print(f"Early stopping at epoch {epoch+1}")
             break
     plot_losses(metrics, "vae_loss_plots")
-    return model, best_model_state,  metrics.history    
+    return model, best_model_state,  metrics   
 
 if __name__ == "__main__":
-    model, best_model_state, history = main()
+    model, best_model_state, metrics = main()
    
     print("Training complete. Best model state saved.")
     # Save the best model state if needed
@@ -147,5 +147,11 @@ if __name__ == "__main__":
     from datetime import datetime
     os.makedirs("models", exist_ok=True)
     timestamp = datetime.now().strftime("%m%d_%H%M%S")
-    torch.save(model, f'models/vae_model_{timestamp}.pth')
+    state = {
+        'model_state': model.state_dict(),
+        'metrics': metrics,
+        'config': get_config(),
+        'timestamp': timestamp
+    }
+    torch.save(model, f'models/model_state_vae_{timestamp}.pth')
     print("Best model saved to 'models'.")

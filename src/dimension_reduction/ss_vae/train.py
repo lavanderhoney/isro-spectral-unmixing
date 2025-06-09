@@ -128,5 +128,12 @@ if __name__ == "__main__":
     from datetime import datetime
     timestamp = datetime.now().strftime("%m%d_%H%M%S")
     os.makedirs("model", exist_ok=True)
-    #save the model
-    torch.save(model.state_dict(), f"models/model_state_ss_vae_{timestamp}.pth")
+    
+    #save the model with config
+    state = {
+        'model_state': model.state_dict(),
+        'metrics': metrics,
+        'config': get_config(),
+        'timestamp': timestamp
+    }
+    torch.save(state, f"models/model_state_ss_vae_{timestamp}.pth")

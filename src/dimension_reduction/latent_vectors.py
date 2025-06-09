@@ -36,7 +36,8 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
      # Set the model to evaluation mode
     input_tensor = torch.from_numpy(input_data).float()
     if model_name == 'ss-vae':
-        raw_state_dict = torch.load(model_path, map_location='cpu')
+        state = torch.load(model_path, map_location='cpu')
+        raw_state_dict = state['model_state_dict'] if 'model_state_dict' in state else state
 
         # Remove '_orig_mod.' prefix from all keys
         cleaned_state_dict = {
@@ -44,13 +45,13 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
             for k, v in raw_state_dict.items()
         }
         model_ss = SpatialSpectralNet(
-            n_bands=109,
-            patch_size=5,
-            ld=12,
-            hidden_dim=64,
-            lstm_layers=3,
-            cnn_layers=3,
-            free_bits=0.1
+            n_bands=state['config']['n_bands'],
+            patch_size=state['config']['patch_size'],
+            ld=state['config']['ld'],
+            hidden_dim=state['config']['hidden_dim'],
+            lstm_layers=state['config']['lstm_layers'],
+            cnn_layers=state['config']['cnn_layers'],
+            free_bits=state['config']['free_bits'],
         )
         model_ss.load_state_dict(cleaned_state_dict)
         model_ss.eval()  # Set the model to evaluation mode
@@ -66,9 +67,22 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
 
         latent_vector = revised_mean.detach().numpy()
     elif model_name =='vae':
-        model = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
-        model.eval()
-        mean, log_var, _ = model(input_tensor)
+        state = torch.load(model_path, map_location='cpu')
+        raw_state_dict = state['model_state_dict'] if 'model_state_dict' in state else state
+
+        # Remove '_orig_mod.' prefix from all keys
+        cleaned_state_dict = {
+            k.replace("_orig_mod.", ""): v
+            for k, v in raw_state_dict.items()
+        }
+        model_vae = VAE(
+            input_dim=input_data.shape[1],  # n_bands
+            latent_dim=state['config']['latent_dim'],
+            hidden_dim=state['config']['hidden_dim'],
+        )
+        model_vae.load_state_dict(cleaned_state_dict)
+        model_vae.eval()
+        mean, log_var, _ = model_vae(input_tensor)
         latent_vector = mean.detach().numpy()  # Use the mean as the latent vector
     # scaler = MinMaxScaler()
     # latent_vectors_01 = scaler.fit_transform(latent_vectors)  # Normalize the latent vectors to [0, 1]
