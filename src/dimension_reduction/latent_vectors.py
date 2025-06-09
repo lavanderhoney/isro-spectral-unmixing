@@ -68,7 +68,7 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
         latent_vector = revised_mean.detach().numpy()
     elif model_name =='vae':
         state = torch.load(model_path, map_location='cpu', weights_only=False)
-        raw_state_dict = state['model_state_dict'] if 'model_state_dict' in state else state
+        raw_state_dict = state['model_state'] if 'model_state' in state else state
 
         # Remove '_orig_mod.' prefix from all keys
         cleaned_state_dict = {
@@ -77,8 +77,8 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
         }
         model_vae = VAE(
             input_dim=input_data.shape[1],  # n_bands
-            latent_dim=state['config'].atent_dim,
-            hidden_dim=state['config'].idden_dim,
+            latent_dim=state['config'].latent_dim,
+            hidden_dim=state['config'].hidden_dim,
         )
         model_vae.load_state_dict(cleaned_state_dict)
         model_vae.eval()

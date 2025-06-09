@@ -135,35 +135,35 @@ if __name__ == "__main__":
     print("Data loaded and reshaped:", X_flat.shape)
     kmeans_labels, score = kmeans_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
     print("KMeans clustering completed.", kmeans_labels.shape)
-    print("Silhouette Score:", score)
-    _ = plot_and_eval(H, 4, kmeans_labels, "KMeans")
+#     print("Silhouette Score:", score)
+#     _ = plot_and_eval(H, 4, kmeans_labels, "KMeans")
     
     
-#%%
-    gmm_labels = gmm_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
-    print("GMM clustering completed.", gmm_labels.shape)
-    plot_and_eval(H, 4, gmm_labels, "GMM")
+# #%%
+#     gmm_labels = gmm_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
+#     print("GMM clustering completed.", gmm_labels.shape)
+#     plot_and_eval(H, 4, gmm_labels, "GMM")
 
 #%%
     scaler = StandardScaler()
     X_flat_norm = scaler.fit_transform(X_flat)
-    # latent_vectors = extract_latent_vectors('vae', 'src/models/model_state_vae_0609_034523.pth', X_flat_norm)
-    # print("Latent vectors extracted.", latent_vectors.shape)
+    latent_vectors_vae = extract_latent_vectors('vae', 'src/models/model_state_vae_0609_045053.pth', X_flat_norm)
+    print("Latent vectors extracted.", latent_vectors_vae.shape)
     
-    # latent_kmeans_labels_vae, score = kmeans_clustering(latent_vectors, n_clusters=4, rows=rows, cols=cols)
-    # print("KMeans clustering on latent vectors completed.", latent_kmeans_labels_vae.shape)
-    # print("Silhouette Score for latent vectors:", score)
-    # __ = plot_and_eval(H, 4, latent_kmeans_labels_vae, "KMeans Latent", img_type='latent', model_name='vae')
+    latent_kmeans_labels_vae, score = kmeans_clustering(latent_vectors_vae, n_clusters=4, rows=rows, cols=cols)
+    print("KMeans clustering on latent vectors completed.", latent_kmeans_labels_vae.shape)
+    print("Silhouette Score for latent vectors:", score)
+    __ = plot_and_eval(H, 4, latent_kmeans_labels_vae, "KMeans Latent", img_type='latent', model_name='vae')
     
-    # print("ARI Score:", adjusted_rand_score(kmeans_labels.flatten(), latent_kmeans_labels_vae.flatten()))
-    # print("NMI Score:", normalized_mutual_info_score(kmeans_labels.flatten(), latent_kmeans_labels_vae.flatten()))
+    print("ARI Score:", adjusted_rand_score(kmeans_labels.flatten(), latent_kmeans_labels_vae.flatten()))
+    print("NMI Score:", normalized_mutual_info_score(kmeans_labels.flatten(), latent_kmeans_labels_vae.flatten()))
     
     #%%
 
-    latent_vectors = extract_latent_vectors('ss-vae', 'src/models/model_state_ss_vae_0609_035249.pth', X_flat)
-    print("Latent vectors extracted.", latent_vectors.shape)
+    latent_vectors_ssvae = extract_latent_vectors('ss-vae', 'src/models/model_state_ss_vae_0609_035249.pth', X_flat)
+    print("Latent vectors extracted.", latent_vectors_ssvae.shape)
     
-    latent_kmeans_labels_ssvae, score = kmeans_clustering(latent_vectors, n_clusters=4, rows=997, cols=246)
+    latent_kmeans_labels_ssvae, score = kmeans_clustering(latent_vectors_ssvae, n_clusters=4, rows=997, cols=246)
     print("KMeans clustering on latent vectors completed.", latent_kmeans_labels_ssvae.shape)
     print("Silhouette Score for latent vectors:", score)
     __ = plot_and_eval(H, 4, latent_kmeans_labels_ssvae, "KMeans Latent", img_type='latent', model_name='ss-vae')
@@ -178,3 +178,27 @@ if __name__ == "__main__":
     print("ARI Score:", adjusted_rand_score(cropped_kmeans_labels.flatten(), latent_kmeans_labels_ssvae.flatten()))
     print("NMI Score:", normalized_mutual_info_score(cropped_kmeans_labels.flatten(), latent_kmeans_labels_ssvae.flatten()))
 # %%
+    print(" ")
+    print("For k=2 clustering: \n")
+    latent_kmeans_labels_vae, score = kmeans_clustering(latent_vectors_vae, n_clusters=2, rows=rows, cols=cols)
+    print("KMeans clustering on latent vectors completed.", latent_kmeans_labels_vae.shape)
+    print("Silhouette Score for latent vectors:", score)
+    __ = plot_and_eval(H, 2, latent_kmeans_labels_vae, "KMeans Latent", img_type='latent', model_name='vae')
+    
+    print("ARI Score:", adjusted_rand_score(kmeans_labels.flatten(), latent_kmeans_labels_vae.flatten()))
+    print("NMI Score:", normalized_mutual_info_score(kmeans_labels.flatten(), latent_kmeans_labels_vae.flatten()))
+    
+    latent_kmeans_labels_ssvae, score = kmeans_clustering(latent_vectors_ssvae, n_clusters=2, rows=997, cols=246)
+    print("KMeans clustering on latent vectors completed.", latent_kmeans_labels_ssvae.shape)
+    print("Silhouette Score for latent vectors:", score)
+    __ = plot_and_eval(H, 2, latent_kmeans_labels_ssvae, "KMeans Latent", img_type='latent', model_name='ss-vae')
+    orig_rows, orig_cols = H.shape[1], H.shape[2]
+    latent_rows, latent_cols = latent_kmeans_labels_ssvae.shape
+    row_margin = (orig_rows - latent_rows) // 2
+    col_margin = (orig_cols - latent_cols) // 2
+
+    cropped_kmeans_labels = kmeans_labels[row_margin:row_margin + latent_rows,
+                          col_margin:col_margin + latent_cols]
+
+    print("ARI Score:", adjusted_rand_score(cropped_kmeans_labels.flatten(), latent_kmeans_labels_ssvae.flatten()))
+    print("NMI Score:", normalized_mutual_info_score(cropped_kmeans_labels.flatten(), latent_kmeans_labels_ssvae.flatten()))

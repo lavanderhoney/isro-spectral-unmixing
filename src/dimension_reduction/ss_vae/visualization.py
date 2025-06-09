@@ -17,7 +17,7 @@ def plot_losses(metrics, save_path="src/dimension_reduction/ss_vae/training_runs
         axs[i].grid(True)
     
     timestamp = datetime.now().strftime("%m%d_%H%M%S")
-    save_path = f"{save_path}_loss_plot_{timestamp}.png"
+    save_path = f"training_runs/{save_path}_loss_plot_{timestamp}.png"
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path)
