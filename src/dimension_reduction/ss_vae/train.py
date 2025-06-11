@@ -1,4 +1,5 @@
 from time import sleep
+from typing import Tuple
 from dimension_reduction.ss_vae.config import get_config # import config from the same directory
 from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
 from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
@@ -15,8 +16,7 @@ import torch.nn as nn
 # change the dataloaders  accepts the data path, batch size, patch size from the user
 #---------------------------
 
-def main():
-    config = get_config()   
+def main(config):
     metrics = MetricsLogger()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -120,10 +120,12 @@ def main():
             print(f"Early stopping triggered at epoch: {epoch}")
             break
     plot_losses(metrics, 'ssvae_loss_plots')
-    return model, best_model_state, metrics
+    return model, metrics
 #%%
 if __name__ == "__main__":
-    model, best_model_statem, metrics = main()
+
+    config = get_config()
+    model, metrics = main(config)
     import os
     from datetime import datetime
     timestamp = datetime.now().strftime("%m%d_%H%M%S")
@@ -133,7 +135,7 @@ if __name__ == "__main__":
     state = {
         'model_state': model.state_dict(),
         'metrics': metrics,
-        'config': get_config(),
+        'config': config,
         'timestamp': timestamp
     }
     torch.save(state, f"models/model_state_ss_vae_{timestamp}.pth")

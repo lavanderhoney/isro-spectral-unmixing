@@ -48,7 +48,7 @@ class SpatialSpectralEncoder(nn.Module):
         x_ls = self.local_spatial_sensing(loc_sensing_data) #(batch, ld//4)
         x_ss = self.sequential_spatial_sensing(seq_sensing_data) #(batch, ld//4)
         
-        revised_mean = torch.concat((x_ls, x_ss, x_mean), 1)
+        revised_mean = torch.concat((x_ls, x_ss, x_mean), 1) #as perp
         
         #calc the homology loss and KL loss for use in training loop
         self.homology_loss_term = homology_loss(x_ls, x_ss)

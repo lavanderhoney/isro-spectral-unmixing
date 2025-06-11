@@ -1,6 +1,6 @@
 import argparse
 
-def get_config():
+def get_config()-> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Spatial-Spectral VAE Training')
     
     # Data parameters
