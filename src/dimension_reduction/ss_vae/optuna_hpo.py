@@ -44,7 +44,8 @@ def objective(trial: optuna.trial.Trial) -> float:
     config.latent_dim = trial.suggest_int("latent_dim", 16, 128, step=16)
     config.hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
     config.beta = trial.suggest_float('beta', 1e-3, 0.1, log=True)
-    config.lstm_layers = trial.suggest_int("lstm_layers", 1, 3)
+    config.lstm_layers = trial.suggest_int("lstm_layers", 3, 5)
+    config.cnn_layers = trial.suggest_int("cnn_layers", 3, 5)
     config.patch_size = trial.suggest_categorical("patch_size", [5, 7, 9, 11])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
