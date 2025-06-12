@@ -19,8 +19,8 @@ import torch.nn as nn
 def main(config):
     metrics = MetricsLogger()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    train_dl, test_dl = get_dataloaders(config.batch_size) 
+
+    train_dl, test_dl = get_dataloaders(config.data_path, config.batch_size, config.patch_size, config.test_size) 
     print("Dataloaders created !")
     #%%
     model = SpatialSpectralNet(

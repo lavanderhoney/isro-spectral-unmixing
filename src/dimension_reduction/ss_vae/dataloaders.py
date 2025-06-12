@@ -5,7 +5,8 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 from skimage.restoration import denoise_tv_chambolle
 from typing import Tuple
-
+from argparse import Namespace
+import os
 """
 Data downloaded using this script: https://www.kaggle.com/code/milapp180/fc-vae-iirs-dim-reduction
 It is noisy reflectance data, of shape 109 x 1001 x 250, with: B x H x W
@@ -19,16 +20,16 @@ It is noisy reflectance data, of shape 109 x 1001 x 250, with: B x H x W
 
 # #---- denoise the reflectance data. ----# # not storing denoised data, so that we can change the denoising method here later
 # refl_data: np.ndarray = denoise_tv_chambolle(noisy_refl_data, max_num_iter=50, weight=20)
-refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
-unloaded = np.load(refl_cube_path)
-refl_data = unloaded['den_refl_data']
-wavelengths = unloaded['wavelengths']
-print("Denoised image extracted!")
+# refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
+# unloaded = np.load(refl_cube_path)
+# refl_data = unloaded['den_refl_data']
+# wavelengths = unloaded['wavelengths']
+# print("Denoised image extracted!")
 
-spectral_bands = refl_data.shape[0]
-# %% 
-#---- normalize and create batched sequence data for the LSTM ----#
-neighborhood_size = 5 # s So seq lenght = sxs
+# spectral_bands = refl_data.shape[0]
+# # %% 
+# #---- normalize and create batched sequence data for the LSTM ----#
+# neighborhood_size = 5 # s So seq lenght = sxs
 
 
 def extract_patches(data_cube: torch.Tensor, s: int = 5) -> torch.Tensor:
@@ -83,8 +84,17 @@ class SSVAEDataset(Dataset):
         
         return patch  # shape = (s, s, B)
 
-def get_dataloaders(batch_size: int = 32, neighborhood_size: int=5, test_size: float=0.1) -> Tuple[DataLoader, DataLoader]:
+# main function used when importing this module
+def get_dataloaders(data_path:str, batch_size: int = 32, neighborhood_size: int=5, test_size: float=0.1) -> Tuple[DataLoader, DataLoader]:
     
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Data path {data_path} does not exist. Please check the path.")
+    unloaded = np.load(data_path)
+    if 'den_refl_data' not in unloaded or 'wavelengths' not in unloaded:
+        raise KeyError("The loaded data does not contain 'den_refl_data' or 'wavelengths'. Please check the file format. \
+                       Ensure the file is a valid .npz file with the expected keys.")
+    refl_data = unloaded['den_refl_data']
+    wavelengths = unloaded['wavelengths']
     patches = extract_patches(torch.Tensor(refl_data), neighborhood_size)
     print("patches extracted:", patches.shape)
 
@@ -98,7 +108,10 @@ def get_dataloaders(batch_size: int = 32, neighborhood_size: int=5, test_size: f
 
 # %%
 if __name__ == "__main__":
-    train_loader, test_loader = get_dataloaders(batch_size=32)
+    from src.dimension_reduction.ss_vae.config import get_config
+    config = get_config()
+    config.data_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'  # Set the data path to the denoised reflectance data
+    train_loader, test_loader = get_dataloaders(config.data_path, batch_size=32)
     for batch in train_loader:
         print("Batch shape:", batch.shape)  # (batch_size, s, s, B)
         break

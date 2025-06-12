@@ -4,7 +4,7 @@ def get_config()-> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Spatial-Spectral VAE Training')
     
     # Data parameters
-    parser.add_argument('--data_path', type=str, default='./data', help='Dataset directory')
+    parser.add_argument('--data_path', type=str, default='/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz', help='Dataset directory')
     parser.add_argument('--batch_size', type=int, default=32, help='Input batch size')
     parser.add_argument('--patch_size', type=int, default=5, help='Spatial neighborhood size')
     

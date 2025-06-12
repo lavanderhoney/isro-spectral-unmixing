@@ -17,6 +17,16 @@ from dimension_reduction.ss_vae.utils import extract_spectral_data
 # You can comment this out if you want to see progress bars for each trial
 TQDM_DISABLE = True
 
+class DataParallelProxy(nn.DataParallel):
+    """A DataParallel that forwards attribute access to the underlying .module."""
+    def __getattr__(self, name):
+        try:
+            # first try the normal behavior (e.g. .cuda, .forward, .module, .device)
+            return super().__getattr__(name)
+        except AttributeError:
+            # if it's not found on the wrapper, forward to the wrapped module
+            return getattr(self.module, name)
+        
 def objective(trial: optuna.trial.Trial) -> float:
     """
     Defines a single trial for Optuna hyperparameter search.
@@ -40,7 +50,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Ensure dataloaders are created for each trial if parameters like batch_size change
-    train_dl, test_dl = get_dataloaders(config.batch_size)
+    train_dl, test_dl = get_dataloaders(config.data_path, config.batch_size, config.patch_size)
 
     model = SpatialSpectralNet(
         train_dl.dataset.__getattribute__('B'),
@@ -51,6 +61,10 @@ def objective(trial: optuna.trial.Trial) -> float:
         config.cnn_layers,
         config.free_bits
     ).to(device)
+    
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs for training.")
+        model = DataParallelProxy(model)
 
     # Note: torch.compile can add overhead for short trials.  removing it during hyperparameter search for speed.
 
@@ -71,9 +85,9 @@ def objective(trial: optuna.trial.Trial) -> float:
             recon = model(x)
             input_spectra = extract_spectral_data(x)
             recon_loss_term = recon_loss_fn(recon, input_spectra)
-            kl_loss = model.encoder.kl_loss_term
-            homology_loss = model.encoder.homology_loss_term
-            loss = recon_loss_term + config.beta * kl_loss + homology_loss
+            kl_loss = model.encoder.kl_loss_term # type: ignore
+            homology_loss = model.encoder.homology_loss_term # type: ignore
+            loss = recon_loss_term + config.beta * kl_loss + homology_loss # type: ignore
             
             if math.isnan(loss.item()):
                 # If loss is NaN, it's a failed trial. Prune it.
@@ -92,9 +106,9 @@ def objective(trial: optuna.trial.Trial) -> float:
                 recon = model(x)
                 input_spectra = extract_spectral_data(x)
                 recon_loss_term = recon_loss_fn(recon, input_spectra)
-                kl_loss = model.encoder.kl_loss_term
-                homology_loss = model.encoder.homology_loss_term
-                loss = recon_loss_term + config.beta * kl_loss + homology_loss
+                kl_loss = model.encoder.kl_loss_term # type: ignore
+                homology_loss = model.encoder.homology_loss_term # type: ignore
+                loss = recon_loss_term + config.beta * kl_loss + homology_loss # type: ignore
                 total_test_loss += loss.item()
         
         avg_test_loss = total_test_loss / len(test_dl)
