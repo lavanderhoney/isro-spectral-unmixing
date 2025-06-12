@@ -17,15 +17,15 @@ from dimension_reduction.ss_vae.utils import extract_spectral_data
 # You can comment this out if you want to see progress bars for each trial
 TQDM_DISABLE = True
 
-class DataParallelProxy(nn.DataParallel):
-    """A DataParallel that forwards attribute access to the underlying .module."""
-    def __getattr__(self, name):
-        try:
-            # first try the normal behavior (e.g. .cuda, .forward, .module, .device)
-            return super().__getattr__(name)
-        except AttributeError:
-            # if it's not found on the wrapper, forward to the wrapped module
-            return getattr(self.module, name)
+# class DataParallelProxy(nn.DataParallel):
+#     """A DataParallel that forwards attribute access to the underlying .module."""
+#     def __getattr__(self, name):
+#         try:
+#             # first try the normal behavior (e.g. .cuda, .forward, .module, .device)
+#             return super().__getattr__(name)
+#         except AttributeError:
+#             # if it's not found on the wrapper, forward to the wrapped module
+#             return getattr(self.module, name)
         
 def objective(trial: optuna.trial.Trial) -> float:
     """
@@ -63,9 +63,9 @@ def objective(trial: optuna.trial.Trial) -> float:
         config.free_bits
     ).to(device)
     
-    if torch.cuda.device_count() > 1:
-        print(f"Using {torch.cuda.device_count()} GPUs for training.")
-        model = DataParallelProxy(model)
+    # if torch.cuda.device_count() > 1:
+    #     print(f"Using {torch.cuda.device_count()} GPUs for training.")
+    #     model = DataParallelProxy(model)
 
     # Note: torch.compile can add overhead for short trials.  removing it during hyperparameter search for speed.
 
