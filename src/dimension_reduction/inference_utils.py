@@ -4,7 +4,6 @@ Extract the latent vectors.
 """
 import sys
 import os
-
 import torch
 import numpy as np
 from typing import Literal, Union
@@ -13,11 +12,14 @@ from matplotlib import pyplot as plt
 from mineral_analysis.endmember_extraction import extract_endmembers
 from dimension_reduction.vae.vae import VAE  
 from sklearn.preprocessing import MinMaxScaler
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders, get_dataloaders_ssvae
 from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
 from dimension_reduction.ss_vae.spectral_encoder import SpectralEncoder
 from dimension_reduction.ss_vae.local_sensing import LocalSensingNet
 from dimension_reduction.ss_vae.sequential_sensing import SequentialSensingNet
+from dimension_reduction.ss_vae.config import get_config
+
+config = get_config()
 
 def load_model_state_dict(model_name: Literal['vae', 'ss-vae'], model_path: str, n_bands: int) -> Union[VAE, SpatialSpectralNet]:
     if model_name == 'ss-vae':
@@ -75,7 +77,7 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
     if model_name == 'ss-vae':
         model_ss = load_model_state_dict(model_name, model_path, input_data.shape[1])
         model_ss.eval()  # Set the model to evaluation mode
-        input_dl, _ = get_dataloaders(batch_size=input_data.shape[0], neighborhood_size=5, test_size=0)
+        input_dl, _ = get_dataloaders_ssvae(data_path=config.data_path, batch_size=input_data.shape[0], neighborhood_size=5, test_size=0)
         for batch in input_dl:
             x=batch.float()
             # print(x.shape)
@@ -109,7 +111,7 @@ def get_recon_spectra(model_name: Literal['vae', 'ss-vae'], model_path: str, inp
     if model_name == 'ss-vae':
         model_ss = load_model_state_dict(model_name, model_path, input_data.shape[1])
         model_ss.eval()  # Set the model to evaluation mode
-        input_dl, _ = get_dataloaders(batch_size=input_data.shape[0], neighborhood_size=5, test_size=0)
+        input_dl, _ = get_dataloaders_ssvae(data_path=config.data_path, batch_size=input_data.shape[0], neighborhood_size=5, test_size=0)
         for batch in input_dl:
             x=batch.float()
             with torch.inference_mode():

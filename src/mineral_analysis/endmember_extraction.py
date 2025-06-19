@@ -1,3 +1,4 @@
+#%%
 """
 Applies the classical algorithms: N-FINDR, VCA, FIPPI and ATGP, and optionally compute and plot abundance maps.
 """
@@ -45,7 +46,6 @@ def plot_endmembers(endmembers, wavelengths, title="Extracted Endmember Spectra"
     plt.grid(True)
     plt.tight_layout()
     plt.show()
-
 
 def plot_amaps(abundance_map, H_t, wavelengths,ea, target_wl=750): 
     """
@@ -99,22 +99,22 @@ def extract_endmembers(H_t: np.ndarray,
                        show_amaps: bool = True) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     Extract endmembers from a hyperspectral cube using specified algorithm.
-    
-    Parameters:
-    - H_t: (rows, cols, bands) hyperspectral data cube
-    - wavelengths: (bands,) array of wavelength values
-    - algorithm: 'nfnd', 'vca', 'fippi', or 'atgp'
-    - n_endmembers: number of endmembers to extract
-    - show_results: plot the extracted endmembers
-    - show_amaps : plot abundance maps if True
+
+    Args:
+        H_t: (rows, cols, bands) hyperspectral data cube
+        wavelengths: (bands,) array of wavelength values
+        algorithm: 'nfnd', 'vca', 'fippi', or 'atgp'
+        n_endmembers: number of endmembers to extract
+        show_results: plot the extracted endmembers
+        show_amaps : plot abundance maps if True
     
     Returns:
-    - endmembers: (n_endmembers, bands) array of extracted endmember spectra
-    - abundance_maps: (rows, cols, n_endmembers) array of abundance maps if plot_amaps is True
+        endmembers: (n_endmembers, bands) array of extracted endmember spectra
+        abundance_maps: (rows, cols, n_endmembers) array of abundance maps if plot_amaps is True
     """
     if algorithm == 'nfindr':
         ee_nfindr = eea.NFINDR()
-        em_nfindr = ee_nfindr.extract(M=H_t, q=3)
+        em_nfindr = ee_nfindr.extract(M=H_t, q=n_endmembers)
         # print("NFINDR's endmembers: ", em_nfindr)
         if show_endmembers:
             plot_endmembers(em_nfindr, wavelengths, title=f"NFINDR Endmember Spectra", algorithm_name="NFINDR")
@@ -165,3 +165,29 @@ def extract_endmembers(H_t: np.ndarray,
         return em_atgp, amap_atgp if show_amaps else em_atgp
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}. Choose from 'nfindr', 'vca', 'fippi', or 'atgp'.")
+
+#%%
+if __name__ == "__main__":
+    # Example usage
+    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'
+
+    unloaded = np.load(refl_cube_path)
+    H = unloaded['den_refl_data']
+    wavelengths = unloaded['wavelengths']
+    H_t = np.moveaxis(H, 0, 2)  # Shape: (rows, cols, bands)
+    H_t = H_t.astype('float32')
+    ems, amap = extract_endmembers(H_t, wavelengths, algorithm='nfindr', n_endmembers=4)
+    plot_endmembers(ems, wavelengths, title="N-FINDR Endmember Spectra", algorithm_name="N-FINDR")
+    
+    #DONT normalize the cube, it distorts the results apparently
+    # rows, cols, bands = H_t.shape
+    # X_flat = H_t.reshape(rows*cols, bands)
+    # from sklearn.preprocessing import StandardScaler
+    # scaler = StandardScaler()
+    # X_flat_norm = scaler.fit_transform(X_flat)
+    # H_t_norm = X_flat_norm.reshape(rows, cols, bands)  # Reshape back to (rows, cols, bands)
+    
+    # ems_norm, amap_norm = extract_endmembers(H_t_norm, wavelengths, algorithm='nfindr', n_endmembers=4)
+    # plot_endmembers(ems_norm, wavelengths, title="N-FINDR Endmember Spectra (Normalized)", algorithm_name="N-FINDR (Normalized)")
+
+# %%

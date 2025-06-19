@@ -5,6 +5,7 @@ from time import sleep
 from dimension_reduction.ss_vae.config import get_config
 from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
 from dimension_reduction.ss_vae.visualization import plot_losses
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders
 from .vae import VAE
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
@@ -19,34 +20,19 @@ def main():
     """
     # Load and preprocess the reflectance data
     refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
-    unloaded = np.load(refl_cube_path)
-    refl_data = unloaded['den_refl_data']
-    wavelengths = unloaded['wavelengths']
-    print("Denoised image extracted!")
-
-    spectral_bands = refl_data.shape[0]
-    H_t = np.moveaxis(refl_data, 0, 2)
-
-    rows, cols, bands = H_t.shape
-    X_flat = H_t.reshape(rows*cols, bands)
-
-    X_flat_train, X_flat_test = train_test_split(X_flat, train_size=0.8, shuffle=True)
-    scaler = StandardScaler()
-    X_flat_train_norm = scaler.fit_transform(X_flat_train)
-    X_flat_test_norm = scaler.transform(X_flat_test)
-
+    train_dl, test_dl, wavelengths = get_dataloaders(refl_cube_path)
+    # Get a batch to determine the number of spectral bands
+    first_batch = next(iter(train_dl))
+    n_bands = first_batch[0].shape[1]  # Number of spectral bands
     config = get_config()
     metrics = MetricsLogger()
 
-    train_data = TensorDataset(torch.tensor(X_flat_train_norm))
-    test_data = TensorDataset(torch.tensor(X_flat_test_norm))
-    train_dl = DataLoader(train_data, batch_size=config.batch_size, shuffle=True, pin_memory=True)
-    test_dl = DataLoader(test_data, batch_size=config.batch_size, shuffle=True, pin_memory=True)
+    
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = VAE(
-        input_dim=spectral_bands,
+        input_dim=n_bands,  # Number of bands
         hidden_dim=config.hidden_dim,
         latent_dim=config.latent_dim
     ).to(device)

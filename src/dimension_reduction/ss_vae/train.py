@@ -3,7 +3,7 @@ from typing import Tuple
 from dimension_reduction.ss_vae.config import get_config # import config from the same directory
 from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
 from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders_ssvae
 from dimension_reduction.ss_vae.visualization import plot_losses
 from dimension_reduction.ss_vae.utils import extract_spectral_data
 from tqdm import tqdm
@@ -20,7 +20,7 @@ def main(config):
     metrics = MetricsLogger()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_dl, test_dl = get_dataloaders(config.data_path, config.batch_size, config.patch_size, config.test_size) 
+    train_dl, test_dl = get_dataloaders_ssvae(config.data_path, config.batch_size, config.patch_size, config.test_size) 
     print("Dataloaders created !")
     #%%
     model = SpatialSpectralNet(
