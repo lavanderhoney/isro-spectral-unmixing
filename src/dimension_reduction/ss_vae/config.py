@@ -5,6 +5,7 @@ def get_config()-> argparse.Namespace:
     
     # Data parameters
     parser.add_argument('--data_path', type=str, default='/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz', help='Dataset directory')
+    parser.add_argument('--test-size', type=float, default=0.1, help='Proportion of dataset to use for testing')
     parser.add_argument('--batch_size', type=int, default=32, help='Input batch size')
     parser.add_argument('--patch_size', type=int, default=5, help='Spatial neighborhood size')
     
@@ -18,7 +19,7 @@ def get_config()-> argparse.Namespace:
     parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
     parser.add_argument('--beta', type=float, default=1, help='KL loss weight')
-    parser.add_argument('--gamma', type=float, default=0.1, help='Total variation loss weight')
+    parser.add_argument('--gamma', type=float, default=0.01, help='Total variation loss weight')
     parser.add_argument('--free_bits', type=float, default=0.1, help='Free bits for KL divergence')
     parser.add_argument('--update_interval', type=int, default=1000, help='Log interval in iterations')
     
