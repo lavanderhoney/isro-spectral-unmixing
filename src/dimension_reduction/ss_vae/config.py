@@ -18,6 +18,7 @@ def get_config()-> argparse.Namespace:
     parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
     parser.add_argument('--beta', type=float, default=1, help='KL loss weight')
+    parser.add_argument('--gamma', type=float, default=0.1, help='Total variation loss weight')
     parser.add_argument('--free_bits', type=float, default=0.1, help='Free bits for KL divergence')
     parser.add_argument('--update_interval', type=int, default=1000, help='Log interval in iterations')
     
