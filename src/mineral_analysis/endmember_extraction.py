@@ -47,12 +47,14 @@ def plot_endmembers(endmembers, wavelengths, title="Extracted Endmember Spectra"
     plt.tight_layout()
     plt.show()
 
-def plot_amaps(abundance_map, H_t, wavelengths,ea, target_wl=750): 
+def plot_amaps(abundance_map, H_t, wavelengths, ea, target_wl=750): 
     """
-    abundance_map: numpy array of shape (rows, cols, n_em)
-    H_t: hyperspectral cube of shape (rows, cols, bands)
-    wavelengths: 1D array of length bands
-    target_wl: wavelength (nm) to use for the background image
+    Args:
+        abundance_map: numpy array of shape (rows, cols, n_em)
+        H_t: hyperspectral cube of shape (rows, cols, bands)
+        wavelengths: 1D array of length bands
+        ea: endmember extraction algorithm name
+        target_wl: wavelength (nm) to use for the background image
     """
     # figure out how many EMs
     rows, cols, n_em = abundance_map.shape

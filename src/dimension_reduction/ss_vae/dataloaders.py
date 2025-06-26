@@ -123,7 +123,10 @@ def get_dataloaders(data_path: str,
     rows, cols, bands = H_t.shape
     X_flat = H_t.reshape(rows*cols, bands)
 
-    X_flat_train, X_flat_test = train_test_split(X_flat, test_size=test_size, shuffle=True)
+    if test_size == 0.0:  # used for inference, so no split
+        X_flat_train, X_flat_test = X_flat, X_flat
+    else:
+        X_flat_train, X_flat_test = train_test_split(X_flat, test_size=test_size, shuffle=True)
     if scaling == 'minmax':
         scaler = MinMaxScaler()
     elif scaling == 'standard':

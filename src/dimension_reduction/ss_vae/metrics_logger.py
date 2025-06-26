@@ -11,9 +11,13 @@ class MetricsLogger:
         """
         self.reset_epoch()
         self.history = {
-            'train': {'total': [], 'recon': [], 'kl': [], 'homology': []},
-            'val': {'total': [], 'recon': [], 'kl': [], 'homology': []}
+            'train': {'total': [], 'recon': [], 'kl': [], 'homology': [], 'mv': [], 'sid': []},
+            'val': {'total': [], 'recon': [], 'kl': [], 'homology': [], 'mv': [], 'sid': []}
         }
+
+        # Flags to indicate which losses are being tracked, for use in plotting
+        self.regularization_losses = [False, False, False, False]
+                                    # kl,   homology, mv, sid
     
     def reset_epoch(self) -> None:
         """
@@ -22,11 +26,19 @@ class MetricsLogger:
         It should be called at the start of each epoch to clear previous metrics.
         """
         self.epoch_metrics = {
-            'train': {'total': 0.0, 'recon': 0.0, 'kl': 0.0, 'homology': 0.0, 'count': 0},
-            'val': {'total': 0.0, 'recon': 0.0, 'kl': 0.0, 'homology': 0.0, 'count': 0}
+            'train': {'total': 0.0, 'recon': 0.0, 'kl': 0.0, 'homology': 0.0, 'mv':0.0, 'sid':0.0, 'count': 0},
+            'val': {'total': 0.0, 'recon': 0.0, 'kl': 0.0, 'homology': 0.0, 'mv':0.0, 'sid':0.0, 'count': 0}
         }
     
-    def update(self, phase: Literal['train', 'val'], total: float, recon: float, kl: float, homology: Optional[float]=None) -> None:
+    def update(self, 
+               phase: Literal['train', 'val'], 
+               total: float, 
+               recon: float, 
+               kl: Optional[float]=None, 
+               homology: Optional[float]=None, 
+               mv: Optional[float]=None, 
+               sid: Optional[float]=None
+               ) -> None:
         """
         Updates the metrics for the current epoch, in the `self.epoch_metrics` dict.
         This method accumulates the losses for the specified phase ('train' or 'val').
@@ -37,13 +49,24 @@ class MetricsLogger:
             recon (float): Reconstruction loss.
             kl (float): KL divergence loss.
             homology (float): Homology loss.
+            mv (float): Minimum volume regularization loss.
+            sid (float): Spectral Information Divergence loss.
         """
         metrics = self.epoch_metrics[phase]
         metrics['total'] += total
         metrics['recon'] += recon
-        metrics['kl'] += kl
+        if kl:
+            metrics['kl'] += kl
+            self.regularization_losses[0] = True
         if homology:
             metrics['homology'] += homology
+            self.regularization_losses[1] = True
+        if mv:
+            metrics['mv'] += mv
+            self.regularization_losses[2] = True
+        if sid:
+            metrics['sid'] += sid
+            self.regularization_losses[3] = True
         metrics['count'] += 1
     
     def finalize_epoch(self, phase: Literal['train', 'val']) -> float:
@@ -60,8 +83,10 @@ class MetricsLogger:
         self.history[phase]['total'].append(metrics['total'] / count)
         self.history[phase]['recon'].append(metrics['recon'] / count)
         self.history[phase]['kl'].append(metrics['kl'] / count)
-        if 'homology' in metrics:
-            self.history[phase]['homology'].append(metrics['homology'] / count)
+        self.history[phase]['homology'].append(metrics['homology'] / count)
+        self.history[phase]['mv'].append(metrics['mv'] / count)
+        self.history[phase]['sid'].append(metrics['sid'] / count)
+
         return self.history[phase]['total'][-1]
     
     def get_latest(self, phase):

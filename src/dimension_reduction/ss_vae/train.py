@@ -13,7 +13,6 @@ import torch.optim as optim
 import torch.nn as nn
 #%%
 #--------- TO-DO -----------
-# change the dataloaders  accepts the data path, batch size, patch size from the user
 #---------------------------
 
 def main(config):
@@ -129,7 +128,7 @@ if __name__ == "__main__":
     import os
     from datetime import datetime
     timestamp = datetime.now().strftime("%m%d_%H%M%S")
-    os.makedirs("model", exist_ok=True)
+    os.makedirs("models", exist_ok=True)
     
     #save the model with config
     state = {
