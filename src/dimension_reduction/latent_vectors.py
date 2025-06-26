@@ -2,45 +2,47 @@
 Applies mineral endmember extraction on the latent vectors of a hyperspectral cube.
 Show the reconstructed image, computes the SAM, and plots the original and reconstructed spectra.
 """
+#%%
 import numpy as np
-from typing import Literal
+from typing import Literal,Optional
 from matplotlib import pyplot as plt
+from dimension_reduction.ss_vae.config import get_config
 from mineral_analysis.endmember_extraction import extract_endmembers
 from dimension_reduction.inference_utils import get_recon_spectra
-
+from sklearn.preprocessing import StandardScaler
+#%%
 def show_recon_image(
     model_name: Literal['vae', 'ss-vae'],
     model_path: str,
     input_data: np.ndarray,
     rows: int,
     cols: int,
-    n_samples: int = 3
+    n_samples: int = 3,
+    recon_np: Optional[np.ndarray] = None,
 ) -> None:
     """
     Show reconstructed images from the model given the input data, and compute SAM.
 
-    Parameters:
-    - model_name (str): 'vae' or 'ss-vae'.
-    - model_path (str): Path to the model or state dict.
-    - input_data (np.ndarray): Pixel spectra array of shape (H*W, B).
-    - rows (int), cols (int): Original cube dimensions.
-    - n_samples (int): Number of random spectra to plot.
+    Args:
+        model_name (str): 'vae' or 'ss-vae'.
+        model_path (str): Path to the model or state dict.
+        input_data (np.ndarray): Pixel spectra array of shape (H*W, B).
+        rows (int), cols (int): Original cube dimensions.
+        n_samples (int): Number of random spectra to plot.
+        recon_np (Optional[np.ndarray]): Precomputed reconstructed spectra, if available.
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    from pathlib import Path
-    from typing import Literal
-    import torch
 
-    print(">>> Running show_recon_image with updated plotting and normalization")
+    print(">>> Running show_recon_image with updated plotting")
     band_index = 30  # spectral band to visualize
 
-    # get the reconstructed spectra/image
-    recon_np = get_recon_spectra(
-        model_name=model_name,
-        model_path=model_path,
-        input_data=input_data,
-    )
+    if not isinstance(recon_np, np.ndarray):
+        # get the reconstructed spectra/image
+        recon_np = get_recon_spectra(
+            model_name=model_name,
+            model_path=model_path,
+            input_data=input_data,
+            config=get_config(),
+        )
 
     # Reshape input for plotting
     cube = input_data.reshape(rows, cols, -1)
@@ -56,13 +58,14 @@ def show_recon_image(
     orig_band = cube[:, :, band_index]
 
     # Extract reconstructed band and normalize both for display
-    recon_band = recon_np.mean(axis=1).reshape(effective_rows, effective_cols)
+    recon_band = recon_np.reshape(effective_rows, effective_cols)[:,:, band_index]
     orig_norm = (orig_band - orig_band.min()) / (orig_band.max() - orig_band.min() + 1e-6)
-    recon_norm = (recon_band - recon_band.min()) / (recon_band.max() - recon_band.min() + 1e-6)
+    orig_band = orig_norm  # Use normalized original band for display
+    # recon_norm = (recon_band - recon_band.min()) / (recon_band.max() - recon_band.min() + 1e-6)
 
     # Plot side by side
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
-    im1 = ax1.imshow(orig_norm, cmap='gray', vmin=0, vmax=1)
+    im1 = ax1.imshow(orig_band, cmap='gray', vmin=0, vmax=1)
     ax1.set_title("Original Band 30")
     ax1.axis('off')
     fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
@@ -75,8 +78,9 @@ def show_recon_image(
 
     plt.suptitle("Spectral Band Comparison (Normalized)")
     plt.tight_layout()
-    out_path = Path(f"{model_name}_spectral_band_comparison.png")
-    plt.savefig(out_path)
+    # out_path = Path(f"{model_name}_spectral_band_comparison.png")
+    plt.show()
+    # plt.savefig(out_path)
     plt.close()
 
     # Compute SAM over all pixels
@@ -99,16 +103,17 @@ def show_recon_image(
             orig_spec = flat_orig[i]
             recon_spec = recon_np[i]
             # normalize per-spectrum for visibility
-            orig_s = (orig_spec - orig_spec.min()) / (orig_spec.max() - orig_spec.min() + 1e-6)
-            recon_s = (recon_spec - recon_spec.min()) / (recon_spec.max() - recon_spec.min() + 1e-6)
-            plt.plot(orig_s, '--', label='Original')
-            plt.plot(recon_s, '-', label='Reconstructed', alpha=0.7)
-            plt.title(f"Pixel {i} Spectra (Normalized)")
+            # orig_s = (orig_spec - orig_spec.min()) / (orig_spec.max() - orig_spec.min() + 1e-6)
+            # recon_s = (recon_spec - recon_spec.min()) / (recon_spec.max() - recon_spec.min() + 1e-6)
+            plt.plot(orig_spec, '--', label='Original')
+            plt.plot(recon_spec, '-', label='Reconstructed', alpha=0.7)
+            plt.title(f"Pixel {i} Spectra")
             plt.xlabel("Band index")
-            plt.ylabel("Normalized intensity")
+            plt.ylabel("Reflectance")
             plt.legend()
             plt.grid(True)
-            plt.savefig(f"pixel_{i}_spectra_comparison_{model_name}.png")
+            plt.show()
+            # plt.savefig(f"pixel_{i}_spectra_comparison_{model_name}.png")
             plt.close()
 
 def extract_endmembers_from_latent(latent_vectors: np.ndarray, wavelengths: np.ndarray, algorithm: Literal['nfindr', 'vca', 'fippi', 'atgp'], rows: int, cols:int, n_endmembers: int = 4, ) -> np.ndarray:
@@ -142,6 +147,9 @@ if __name__ == "__main__":
 
     H_t = data_cube.transpose(1, 2, 0) # Transpose to (rows, cols, bands)
     input_data = H_t.reshape(-1, n_bands) # Reshape to (H*W, n_bands)
+    scaler = StandardScaler()
+    input_data = scaler.fit_transform(input_data)  # Normalize the data
+
     # Extract latent vectors using the ss-vae model
     # latent_vectors = extract_latent_vectors('vae', vae_path, input_data)
     # print("Latent vectors shape:", latent_vectors.shape)
@@ -152,6 +160,13 @@ if __name__ == "__main__":
     # print("Endmembers:", endmembers)
     
     # Model's sanity check
-    show_recon_image('ss-vae', ss_vae_path, input_data, rows, cols, n_samples=3)
+    # print("Now with normalized input data")
+    # show_recon_image('ss-vae', ss_vae_path, input_data, rows, cols, n_samples=3)
     # show_recon_image('vae', vae_path, input_data,rows, cols, n_samples=3)
+
+    print("Unmixing AE check")
+    model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_ae_0625_041438.pth"
+    from mineral_analysis.unmixing.analyse_ae import recon_np
+    show_recon_image('vae', model_path, H_t.reshape(-1, 109), H_t.shape[0], H_t.shape[1], 5, recon_np)
+
 # %%
