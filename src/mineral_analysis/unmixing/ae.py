@@ -9,17 +9,20 @@ class AE(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int, latent_dim: int, em_spectra) -> None:   
         super().__init__()
         # Encoder layers
-        self.enc_linear1 = nn.Linear(input_dim, hidden_dim)
-        self.enc_ln1 = nn.LayerNorm(hidden_dim)
+        self.enc_linear1 = nn.Linear(input_dim, hidden_dim) #109,64
+        # self.enc_ln1 = nn.LayerNorm(hidden_dim)
+        self.enc_bn1 = nn.BatchNorm1d(hidden_dim)
         self.enc_act1 = nn.LeakyReLU()
-        self.enc_linear2 = nn.Linear(hidden_dim, hidden_dim)
-        self.enc_ln2 = nn.LayerNorm(hidden_dim)
+
+        self.enc_linear2 = nn.Linear(hidden_dim, hidden_dim//2) #64,32
+        self.enc_bn2 = nn.BatchNorm1d(hidden_dim//2)
         self.enc_act2 = nn.LeakyReLU()
-        self.enc_linear3 = nn.Linear(hidden_dim, hidden_dim)
-        self.enc_ln3 = nn.LayerNorm(hidden_dim)
+
+        self.enc_linear3 = nn.Linear(hidden_dim//2, hidden_dim//4) #32,16
+        self.enc_bn3 = nn.BatchNorm1d(hidden_dim//4)
         self.enc_act3 = nn.LeakyReLU()
         # Encoder's final layer to produce latent_dim (M) outputs
-        self.encoder_output_layer = nn.Linear(hidden_dim, latent_dim) # From last hidden_dim to M
+        self.encoder_output_layer = nn.Linear(hidden_dim//4, latent_dim) # 16,4
         # Learnable or Fixed Endmember Matrix E
         # latent_dim is M (number of endmembers)
         # input_dim is N (number of spectral bands)
@@ -29,26 +32,30 @@ class AE(nn.Module):
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         # First block
         x = self.enc_linear1(x)
-        x = self.enc_ln1(x)
+        x = self.enc_bn1(x)
         x = self.enc_act1(x)
-        x_skip = x  # Save for skip connection
+        # x_skip = x  # Save for skip connection
         
         # Second block with skip connection
         x = self.enc_linear2(x)
-        x = self.enc_ln2(x)
+        x = self.enc_bn2(x)
         x = self.enc_act2(x)
-        x = x + x_skip  # Add skip connection
-        x_skip = x  # Update skip for next connection
+        # x = x + x_skip  # Add skip connection
+        # x_skip = x  # Update skip for next connection
         
         # Third block with skip connection
         x = self.enc_linear3(x)
-        x = self.enc_ln3(x)
+        x = self.enc_bn3(x)
         x = self.enc_act3(x)
-        x = x + x_skip  # Add skip connection
+        # x = x + x_skip  # Add skip connection
         # Final layer to get the latent abundances 'z'
         z = self.encoder_output_layer(x)
-        z = F.relu(z) # Ensures non-negative abundances *from the encoder*
-        return z  # z is of shape (batch_size, M)
+        
+        #----- ANC and ASC constraints -----
+        # z = F.softmax(z, dim=1)  # too aggressive
+        z = F.relu(z) # ANC
+        z = z / (torch.sum(z, dim=1, keepdim=True) + 1e-6)  # ASC: Normalize to sum to 1
+        return z  # (batch_size, M)
 
     def decode(self, z: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # Linear Mixture Model
@@ -129,6 +136,18 @@ def total_variation(E: torch.Tensor) -> torch.Tensor:
     # Compute the Total Variation term
     TV = torch.norm(torch.matmul(E.T,P), p='fro') ** 2  # Frobenius norm squared
     return TV
+
+def entropy_loss(z: torch.Tensor) -> torch.Tensor:
+    """
+    Computes the entropy loss for the latent abundances z.
+    Args:
+        z (torch.Tensor): Latent abundances, shape (batch_size, M).
+    Returns:    
+        torch.Tensor: The average entropy loss over the batch.
+    """
+    # Compute entropy for each sample in the batch
+    entropy = -torch.sum(z * torch.log(z + 1e-8), dim=1)  # Add small value for numerical stability
+    return torch.mean(entropy)  # Average over the batch
 
 if __name__ == "__main__":
     input_dim = 10  # Number of spectral bands

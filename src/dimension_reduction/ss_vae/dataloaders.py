@@ -126,7 +126,7 @@ def get_dataloaders(data_path: str,
     if test_size == 0.0:  # used for inference, so no split
         X_flat_train, X_flat_test = X_flat, X_flat
     else:
-        X_flat_train, X_flat_test = train_test_split(X_flat, test_size=test_size, shuffle=True)
+        X_flat_train, X_flat_test = train_test_split(X_flat, test_size=test_size, shuffle=False)
     if scaling == 'minmax':
         scaler = MinMaxScaler()
     elif scaling == 'standard':
@@ -143,8 +143,8 @@ def get_dataloaders(data_path: str,
 
     train_data = TensorDataset(torch.tensor(X_flat_train_norm))
     test_data = TensorDataset(torch.tensor(X_flat_test_norm))
-    train_dl = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
-    test_dl = DataLoader(test_data, batch_size=batch_size, shuffle=True, pin_memory=True)
+    train_dl = DataLoader(train_data, batch_size=batch_size, shuffle=False, pin_memory=True)
+    test_dl = DataLoader(test_data, batch_size=batch_size, shuffle=False, pin_memory=True)
     return train_dl, test_dl, wavelengths
 
 
