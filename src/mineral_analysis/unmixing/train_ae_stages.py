@@ -1,4 +1,3 @@
-#%%
 import numpy as np
 import torch
 import math
@@ -10,17 +9,16 @@ from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacub
 from mineral_analysis.unmixing.ae import AE, spectral_angle_distance_loss, total_variation, spectral_information_divergence_loss, entropy_loss
 from mineral_analysis.endmember_extraction import extract_endmembers
 from tqdm import tqdm
-#%%
+
 
 def main():
     """
-    Main function to train the LMM based Autoencoder (AE) on reflectance data.
+    Main function to train the LMM based Autoencoder (AE) on reflectance data with two stages.
     """
     torch.autograd.set_detect_anomaly(True)
 
     # Load and preprocess the reflectance data
-    # refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
-    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_m3g20090729t104424_v01_rfl.npz' #downlaoded from iirs pipeline process notebook
+    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
     train_dl, test_dl, wavelengths = get_dataloaders(refl_cube_path)
     H, wavelengths = open_datacube(refl_cube_path)
     H_t = H.transpose(1, 2, 0)  #(H, W, bands)
@@ -29,31 +27,40 @@ def main():
     n_bands = first_batch[0].shape[1]  # Number of spectral bands
     config = get_config()
     metrics = MetricsLogger()
-#%% 
+    
     # Initialize the decoder matrix E as endmembers from VCA
     ems, _ = extract_endmembers(H_t, wavelengths, algorithm='vca', n_endmembers=4, show_endmembers=False, show_amaps=False)
     print("VCA done")
-    print(H_t.shape, wavelengths.shape, ems.shape) # type: ignore
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = AE(
         input_dim=n_bands,  # Number of bands
         hidden_dim=config.hidden_dim,
         latent_dim=4,
         em_spectra=ems,
-        scaling=1.5
+        constraint='man',  
+        scaling=1
     ).to(device)
     # model = torch.compile(model)
-#%%
-    optim = torch.optim.Adam(model.parameters(), lr=config.lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, patience=config.scheduler_patience, threshold=0.01)
+
+    epoch_stage = 2 # train decoder after these epochs
+    encoder_params = [p for p in model.parameters() if p.requires_grad]
+    # print("Encoder parameters: ", encoder_params)
+    decoder_params = [p for p in model.parameters() if not p.requires_grad]
+    # print("Decoder parameters: ", decoder_params[0].shape)
+
+    model.E.requires_grad_(True)  # now that encoder and decoder(E) params are separated, we can do this, 
+                                    # and E will be trained after epoch_stage only.               
+    optim_encoder = torch.optim.Adam(encoder_params, lr=config.lr)
+    optim_decoder = torch.optim.Adam(decoder_params, lr=config.lr)
+    
+    scheduler_encoder = torch.optim.lr_scheduler.ReduceLROnPlateau(optim_encoder, patience=config.scheduler_patience, threshold=0.01)
+    scheduler_decoder = torch.optim.lr_scheduler.ReduceLROnPlateau(optim_decoder, patience=config.scheduler_patience, threshold=0.01)
+    
     patience_cntr = 0
     best_model_state = None
     best_test_loss = float('inf')
-    
-    # print("Initial E: ")
-    # print(model.E)
-
-    print("The Training Begins !")
+   
+    print("The two stage Training Begins !")
     sleep(0.5)
 
     w_recon, w_mv, w_sid, w_ent = 1, 1, 1, 0 # Weights for the losses
@@ -66,43 +73,59 @@ def main():
         for i, x in enumerate(train_pbar):
             x = x[0].float().to(device)  # Extract the tensor from the tuple
             
-            optim.zero_grad()
-           
+            optim_encoder.zero_grad()
+            if epoch > epoch_stage:
+                # print("Unfreezing decoder parameters: ", model.E.requires_grad)
+                optim_decoder.zero_grad()
+                
             x_hat, z, E_positive = model(x)
-
+            assert not torch.isnan(x_hat).any(), "NaN in x_hat"
+            assert not torch.isnan(x).any(), "NaN in x"
+            # print("z stats:",       z.min().item(),     z.max().item(),     z.abs().mean().item())
+            # print("E_positive stats:", 
+            #     E_positive.min().item(), E_positive.max().item())
+            
             recon_loss_term = spectral_angle_distance_loss(x_hat, x)
             mv_loss_term = total_variation(E_positive)
             sid_loss_term = spectral_information_divergence_loss(x_hat, x)
             entropy_loss_term = entropy_loss(z)
             loss = w_recon*recon_loss_term + w_mv* mv_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term
-
+            assert not torch.isnan(loss).any(), "NaN in loss"
+            
             loss.backward()
-            optim.step()
+            for name, param in model.named_parameters():
+                if torch.isnan(param).any() or torch.isinf(param).any() or torch.isnan(param.grad).any(): # type: ignore
+                    print(f"============={name}: {param.shape} - {param.grad}=============")
+                    print(f"Parameter {name} has NaN values.")
+                    
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping to avoid exploding gradients
+            optim_encoder.step()
+            if epoch > epoch_stage:
+                optim_decoder.step()
 
             metrics.update(phase='train', total=loss.item(), recon=recon_loss_term.item(), mv=mv_loss_term.item(), sid=sid_loss_term.item(), homology=entropy_loss_term.item()) # store entropy in metrics under homology as surrogate
 
-            if i % config.update_interval == 0:
-                train_pbar.set_postfix({
-                    "loss": "{:.5f}".format(loss.item()),
-                    "reconstruction": "{:.4f}".format(recon_loss_term.item()),
-                    "total_variation": "{:.4f}".format(mv_loss_term.item()),
-                    "sid_loss": "{:.4f}".format(sid_loss_term.item()),
-                    "entropy": "{:.4f}".format(entropy_loss_term.item())
-                })
-                if math.isnan(loss.item()):
-                    print(E_positive)
-                    print(z)
-                    print(x_hat)
-
-                    for name, param in model.named_parameters():
-                        if torch.isnan(param).any():
-                            print(f"Parameter {name} has NaN values.")
-                    
-                    print("Param gradients:")
-                    for name, param in model.named_parameters():
-                        print(f"{name}: {param.shape} - {param.grad}")
-                    raise ValueError("Loss went to nan.")
-            avg_train_loss = metrics.finalize_epoch('train')
+            train_pbar.set_postfix({
+                "loss": "{:.5f}".format(loss.item()),
+                "reconstruction": "{:.4f}".format(recon_loss_term.item()),
+                "total_variation": "{:.4f}".format(mv_loss_term.item()),
+                "sid_loss": "{:.4f}".format(sid_loss_term.item()),
+                "entropy": "{:.4f}".format(entropy_loss_term.item())
+            })
+            if math.isnan(loss.item()):
+                print(E_positive)
+                print(z)
+                print(x_hat)
+                for name, param in model.named_parameters():
+                    if torch.isnan(param).any():
+                        print(f"Parameter {name} has NaN values.")
+                
+                print("Param gradients:")
+                for name, param in model.named_parameters():
+                    print(f"{name}: {param.shape} - {param.grad}")
+                raise ValueError("Loss went to nan.")
+            avg_train_loss = metrics.finalize_epoch('train')\
+                
         # EVALUATION
         model.eval()
         test_pbar = tqdm(test_dl, total=len(test_dl), desc=f"Epoch {epoch+1}/{config.epochs} [Test]")
@@ -128,7 +151,10 @@ def main():
 
 
         avg_test_loss = metrics.finalize_epoch('val')
-        scheduler.step(avg_test_loss)
+        scheduler_encoder.step(avg_test_loss)
+        
+        if epoch > epoch_stage:
+            scheduler_decoder.step(avg_test_loss)
 
         if avg_test_loss < best_test_loss:
             best_test_loss = avg_test_loss
@@ -143,11 +169,11 @@ def main():
             break
     # plot_losses(metrics, "ae_loss_plots")
     return model, best_model_state,  metrics   
-#%%
+
 if __name__ == "__main__":
     model, best_model_state, metrics = main()
    
-    print("M3 Training complete. Best model state saved.")
+    print("Training complete. Best model state saved.")
     # Save the best model state if needed
     import os
     from datetime import datetime
@@ -159,7 +185,6 @@ if __name__ == "__main__":
         'config': get_config(), #change this to save actual model params
         'timestamp': timestamp
     }
-    torch.save(state, f'models/model_M3_state_ae_scaling{timestamp}.pth')
+    torch.save(state, f'models/model_state_ae_stage_{timestamp}.pth')
     print("Best model saved to 'models'.")
     # plot_losses(metrics, "ae_loss_plots")
-# %%

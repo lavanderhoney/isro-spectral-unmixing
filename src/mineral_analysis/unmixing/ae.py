@@ -3,10 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from typing import Tuple
+from typing import Tuple, Literal
 #%%
 class AE(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int, latent_dim: int, em_spectra) -> None:   
+    def __init__(self, input_dim: int, hidden_dim: int, latent_dim: int, em_spectra, constraint: Literal['softmax', 'man'] = 'softmax', scaling: float = 0.8) -> None:
         super().__init__()
         # Encoder layers
         self.enc_linear1 = nn.Linear(input_dim, hidden_dim) #109,64
@@ -28,33 +28,33 @@ class AE(nn.Module):
         # input_dim is N (number of spectral bands)
         E_tensor = torch.from_numpy(em_spectra).float()
         self.E = nn.Parameter(E_tensor, requires_grad=False)  # M x N matrix
+        self.constraint = constraint  # 'softmax' or 'man'(i.e, manual normalization)
+        self.beta = scaling
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         # First block
         x = self.enc_linear1(x)
         x = self.enc_bn1(x)
         x = self.enc_act1(x)
-        # x_skip = x  # Save for skip connection
         
-        # Second block with skip connection
         x = self.enc_linear2(x)
         x = self.enc_bn2(x)
         x = self.enc_act2(x)
-        # x = x + x_skip  # Add skip connection
-        # x_skip = x  # Update skip for next connection
-        
-        # Third block with skip connection
+      
         x = self.enc_linear3(x)
         x = self.enc_bn3(x)
         x = self.enc_act3(x)
-        # x = x + x_skip  # Add skip connection
-        # Final layer to get the latent abundances 'z'
+
         z = self.encoder_output_layer(x)
         
         #----- ANC and ASC constraints -----
-        # z = F.softmax(z, dim=1)  # too aggressive
-        z = F.relu(z) # ANC
-        z = z / (torch.sum(z, dim=1, keepdim=True) + 1e-6)  # ASC: Normalize to sum to 1
+        if self.constraint == 'softmax':
+            z = F.softmax(z/self.beta, dim=1)  # too aggressive
+        elif self.constraint == 'man':
+            z = F.relu(z)  # ANC
+            z = z / (torch.sum(z, dim=1, keepdim=True) + 1e-6)  # ASC: Normalize to sum to 1
+        else:
+            raise ValueError("Invalid constraint type. Use 'softmax' or 'man'.")
         return z  # (batch_size, M)
 
     def decode(self, z: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -64,7 +64,7 @@ class AE(nn.Module):
         # Output: (batch_size, N)
         E_positive = F.relu(self.E)
         x_hat = torch.matmul(z, E_positive)  # z (batch_size, M) * E (M, N) -> x_hat (batch_size, N)
-        x_hat = F.relu(x_hat)  # Ensure non-negativity of the output
+        # x_hat = F.relu(x_hat)  # Ensure non-negativity of the output
         return x_hat, E_positive
       
 
@@ -76,14 +76,12 @@ class AE(nn.Module):
 
 #loss functions
 def spectral_angle_distance_loss(x_hat: torch.Tensor, x: torch.Tensor, eps:float = 1e-8) -> torch.Tensor:
-    x_hat, x = F.relu(x_hat), F.relu(x)
-    dot_product = torch.inner(x_hat, x)
-    
-    x_hat_normalized = F.normalize(x_hat, p=2, dim=1, eps=eps)
-    x_normalized = F.normalize(x, p=2, dim=1, eps=eps)
-    norms = torch.norm(x_hat_normalized, dim=1) * torch.norm(x_normalized, dim=1)
+    assert not torch.isnan(x_hat).any(), "NaN in x_hat"
+    assert not torch.isnan(x).any(), "NaN in x"
 
-    cos_theta = dot_product / (norms+eps)
+    # x_hat, x = F.softplus(x_hat), F.softplus(x)  # Ensure non-negativity
+
+    cos_theta = F.cosine_similarity(x_hat, x, dim=1, eps=eps)  # Compute cosine similarity
     cos_theta = torch.clamp(cos_theta, -1.0, 1.0)  # Ensure values are in the valid range for acos
     angle = torch.acos(cos_theta)
     return torch.mean(angle) #average over the batch

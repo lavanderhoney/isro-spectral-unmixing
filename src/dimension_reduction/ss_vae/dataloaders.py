@@ -18,7 +18,7 @@ Apparently, normalizing the data is messing with the spectra and the overall dis
 But min-max is still fine
 """
 
-def open_datacube(data_path: str) -> Tuple[np.ndarray, np.ndarray]:
+def open_datacube(data_path: str) -> Tuple[np.ndarray, np.ndarray|None]:
     """
     Opens the data cube from the given path and returns the reflectance data and wavelengths.
     """
@@ -26,13 +26,20 @@ def open_datacube(data_path: str) -> Tuple[np.ndarray, np.ndarray]:
         raise FileNotFoundError(f"Data path {data_path} does not exist. Please check the path.")
     
     unloaded = np.load(data_path)
-    if 'den_refl_data' not in unloaded or 'wavelengths' not in unloaded:
-        raise KeyError("The loaded data does not contain 'den_refl_data' or 'wavelengths'. Please check the file format. \
+    
+    if 'den_refl_data' not in unloaded:
+        raise KeyError("The loaded data does not contain 'den_refl_data'. Please check the file format. \
                        Ensure the file is a valid .npz file with the expected keys.")
     
     refl_data = unloaded['den_refl_data']
-    wavelengths = unloaded['wavelengths']
-    
+    if 'wavelengths' in unloaded:
+        wavelengths = unloaded['wavelengths']
+    else:
+        wave = np.load('/teamspace/studios/this_studio/isro-spectral-unmixing/data/m3_wavelengths_Copy of m3g20090729t104424.npz', allow_pickle=True)
+        wavelengths = wave.get('wavelengths', None)
+
+    if refl_data.ndim != 3 or (refl_data.shape[0] != 109 and refl_data.shape[0]!=85): # 85 for M3
+        raise ValueError(f"Expected reflectance data to have shape (B, H, W), but got {refl_data.shape}. Please check the data format.")
     return refl_data, wavelengths
 
 def extract_patches(data_cube: torch.Tensor, s: int = 5) -> torch.Tensor:
@@ -113,13 +120,19 @@ def get_dataloaders_ssvae(data_path:str, batch_size: int = 32, neighborhood_size
 def get_dataloaders(data_path: str, 
                      batch_size: int = 32, 
                      test_size: float = 0.1, 
-                     scaling: Literal['minmax', 'standard', 'none'] = 'none') -> Tuple[DataLoader, DataLoader, np.ndarray]:
+                     scaling: Literal['minmax', 'standard', 'none'] = 'none') -> Tuple[DataLoader, DataLoader, np.ndarray|None]:
     """
     Return dataloaders and wavelengths for the other models. Just wraps numpy dataset in a PyTorch Dataset and DataLoader.
+    The input datacube is NOT transposed, and its shape should be (B, H, W) where B is the number of bands, H is height, and W is width.
     """
     refl_data, wavelengths = open_datacube(data_path)
-    H_t = np.moveaxis(refl_data, 0, 2)
-
+    print("refl_data shape in get_dataloaders:", refl_data.shape) 
+    
+    if refl_data.shape[2] != 109: # check if bands are in last dimension
+        H_t = np.moveaxis(refl_data, 0, 2)
+        print("H_t shape in get_dataloaders:", H_t.shape)  # (H, W, B)
+    else:
+        raise ValueError("The input data cube should be in shape (B, H, W)")
     rows, cols, bands = H_t.shape
     X_flat = H_t.reshape(rows*cols, bands)
 

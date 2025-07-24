@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/dimension_reduction/__init__.py
+src/dimension_reduction/inference_utils.py
 src/dimension_reduction/latent_vectors.py
 src/isro_spectral_unmixing.egg-info/PKG-INFO
 src/isro_spectral_unmixing.egg-info/SOURCES.txt

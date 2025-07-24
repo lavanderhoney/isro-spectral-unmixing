@@ -45,7 +45,9 @@ def show_recon_image(
         )
 
     # Reshape input for plotting
+    print("Input data shape:", input_data.shape)
     cube = input_data.reshape(rows, cols, -1)
+    print("Input cube shape:", cube.shape)
     if model_name == 'ss-vae':
         # Center-crop original cube to match latent output size
         effective_rows, effective_cols = 997, 246
@@ -58,9 +60,9 @@ def show_recon_image(
     orig_band = cube[:, :, band_index]
 
     # Extract reconstructed band and normalize both for display
-    recon_band = recon_np.reshape(effective_rows, effective_cols)[:,:, band_index]
-    orig_norm = (orig_band - orig_band.min()) / (orig_band.max() - orig_band.min() + 1e-6)
-    orig_band = orig_norm  # Use normalized original band for display
+    recon_band = recon_np.reshape(effective_rows, effective_cols, -1)[:,:, band_index]
+    # orig_norm = (orig_band - orig_band.min()) / (orig_band.max() - orig_band.min() + 1e-6)
+    # orig_band = orig_norm  # Use normalized original band for display
     # recon_norm = (recon_band - recon_band.min()) / (recon_band.max() - recon_band.min() + 1e-6)
 
     # Plot side by side
@@ -92,6 +94,7 @@ def show_recon_image(
         return cos_theta
 
     flat_orig = cube.reshape(-1, cube.shape[2])
+    print(flat_orig.shape)
     sam_scores = compute_sam(flat_orig, recon_np)
     avg_sam = np.mean(sam_scores)
     print(f">>> Average SAM over all pixels: {avg_sam:.2f}°")
@@ -104,7 +107,7 @@ def show_recon_image(
             recon_spec = recon_np[i]
             # normalize per-spectrum for visibility
             # orig_s = (orig_spec - orig_spec.min()) / (orig_spec.max() - orig_spec.min() + 1e-6)
-            # recon_s = (recon_spec - recon_spec.min()) / (recon_spec.max() - recon_spec.min() + 1e-6)
+            # recon_s = (recon_spec - orig_spec.min()) / (orig_spec.max() - orig_spec.min() + 1e-6)
             plt.plot(orig_spec, '--', label='Original')
             plt.plot(recon_spec, '-', label='Reconstructed', alpha=0.7)
             plt.title(f"Pixel {i} Spectra")
@@ -136,13 +139,17 @@ def extract_endmembers_from_latent(latent_vectors: np.ndarray, wavelengths: np.n
     return endmembers  # Return only the endmembers
     
 if __name__ == "__main__":
-    data_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz"
+    data_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_m3g20090729t104424_v01_rfl.npz"
     ss_vae_path = "models/model_state_ss_vae_0609_035249.pth"
     vae_path = "models/model_state_vae_0609_045053.pth"
-    
+
     data = np.load(data_path)
     data_cube = data['den_refl_data']
-    wavelengths = data['wavelengths']
+    if 'wavelengths' in data:
+        wavelengths = data['wavelengths']
+    else:
+        wave = np.load('/teamspace/studios/this_studio/isro-spectral-unmixing/data/m3_wavelengths_Copy of m3g20090729t104424.npz', allow_pickle=True)
+        wavelengths = wave.get('wavelengths', None)
     n_bands, rows, cols = data_cube.shape
 
     H_t = data_cube.transpose(1, 2, 0) # Transpose to (rows, cols, bands)
@@ -165,8 +172,9 @@ if __name__ == "__main__":
     # show_recon_image('vae', vae_path, input_data,rows, cols, n_samples=3)
 
     print("Unmixing AE check")
-    model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_ae_0625_041438.pth"
+    model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_M3_state_ae_scaling0713_123502.pth"
     from mineral_analysis.unmixing.analyse_ae import recon_np
-    show_recon_image('vae', model_path, H_t.reshape(-1, 109), H_t.shape[0], H_t.shape[1], 5, recon_np)
+    #%%
+    show_recon_image('vae', model_path, H_t.reshape(-1, n_bands), H_t.shape[0], H_t.shape[1], 5, recon_np)
 
 # %%

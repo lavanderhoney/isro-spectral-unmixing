@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 # from dimension_reduction.latent_vectors import show_recon_image
 #%%
-model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_ae_0625_041438.pth"
+model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_ae_scaling0713_113510.pth"
 
 state = torch.load(model_path, map_location='cpu', weights_only=False)
 raw_state_dict = state['model_state'] if 'model_state' in state else state
@@ -18,10 +18,10 @@ cleaned_state_dict = {
     k.replace("_orig_mod.", ""): v
     for k, v in raw_state_dict.items()
 }
-H, wavelengths = open_datacube(state['config'].data_path)
+H, wavelengths = open_datacube('/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_ch2_iir_nci_20210620T2110364457_d_img_hw1.npz')
 H_t = H.transpose(1, 2, 0)  # Move bands to the last dimension
 
-input_dl, _, _ = get_dataloaders(state['config'].data_path, batch_size=32, test_size=0.0)
+input_dl, _, _ = get_dataloaders('/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_ch2_iir_nci_20210620T2110364457_d_img_hw1.npz', batch_size=32, test_size=0.0)
 first_batch = next(iter(input_dl))
 # print(first_batch, type(first_batch))
 n_bands = first_batch[0].shape[1]  # type: ignore # Number of spectral bands
@@ -50,14 +50,16 @@ for x in input_dl:
     recon_vectors.append(x_hat.detach().numpy())
 #%%
 
+print("recon vectors: ", len(recon_vectors), recon_vectors[0].shape)
 #Plot the abundance maps
 abundance_vecs = np.concatenate(abundance_vectors, axis=0)
 recon_np = np.concatenate(recon_vectors, axis=0)
+print("recon_np shape:", recon_np.shape)
 print(abundance_vecs.shape)
 amaps = abundance_vecs.reshape(H_t.shape[0], H_t.shape[1], 4)  # Assuming 4 endmembers
 print(amaps.shape)
 eea.plot_amaps(amaps, H_t, wavelengths, "AE", target_wl=750)
 
-ems = model_ae.E.detach().numpy()  # Extract endmembers from the model
-eea.plot_endmembers(ems, wavelengths, "AE")
+# ems = model_ae.E.detach().numpy()  # Extract endmembers from the model
+# eea.plot_endmembers(ems, wavelengths, "AE")
 # %%
