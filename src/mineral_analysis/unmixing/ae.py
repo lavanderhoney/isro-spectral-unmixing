@@ -63,6 +63,8 @@ class AE(nn.Module):
         # E: (M, N)
         # Output: (batch_size, N)
         E_positive = F.relu(self.E)
+        assert not torch.isnan(E_positive).any(), "NaN in E_positive"
+        assert not torch.isnan(z).any(), "NaN in z"
         x_hat = torch.matmul(z, E_positive)  # z (batch_size, M) * E (M, N) -> x_hat (batch_size, N)
         # x_hat = F.relu(x_hat)  # Ensure non-negativity of the output
         return x_hat, E_positive
@@ -76,8 +78,8 @@ class AE(nn.Module):
 
 #loss functions
 def spectral_angle_distance_loss(x_hat: torch.Tensor, x: torch.Tensor, eps:float = 1e-8) -> torch.Tensor:
-    assert not torch.isnan(x_hat).any(), "NaN in x_hat"
-    assert not torch.isnan(x).any(), "NaN in x"
+    # assert not torch.isnan(x_hat).any(), "NaN in x_hat"
+    # assert not torch.isnan(x).any(), "NaN in x"
 
     # x_hat, x = F.softplus(x_hat), F.softplus(x)  # Ensure non-negativity
 

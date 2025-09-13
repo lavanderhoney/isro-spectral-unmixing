@@ -77,8 +77,14 @@ def main():
             if epoch > epoch_stage:
                 # print("Unfreezing decoder parameters: ", model.E.requires_grad)
                 optim_decoder.zero_grad()
-                
-            x_hat, z, E_positive = model(x)
+            try:
+                x_hat, z, E_positive = model(x)
+            except Exception as e:
+                print("Error caught! ")
+                print(e)
+                for name, param in model.named_parameters():
+                    if "z" in name or "E_positive" in name:
+                        print(f"{name}: {param.shape} - {param}")
             assert not torch.isnan(x_hat).any(), "NaN in x_hat"
             assert not torch.isnan(x).any(), "NaN in x"
             # print("z stats:",       z.min().item(),     z.max().item(),     z.abs().mean().item())
