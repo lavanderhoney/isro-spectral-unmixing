@@ -1,16 +1,13 @@
 import numpy as np
 import torch
-import math
 from time import sleep
 from dimension_reduction.ss_vae.config import get_config
 from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
 from dimension_reduction.ss_vae.visualization import plot_losses
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacube
 from .vae import VAE
-from torch.utils.data import Dataset, DataLoader, TensorDataset
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from skimage.restoration import denoise_tv_chambolle
+from mineral_analysis.unmixing.ae import spectral_angle_distance_loss, spectral_information_divergence_loss, entropy_loss
+from mineral_analysis.endmember_extraction import extract_endmembers
 from tqdm import tqdm
 
 def main():
@@ -21,20 +18,26 @@ def main():
     # Load and preprocess the reflectance data
     refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
     train_dl, test_dl, wavelengths = get_dataloaders(refl_cube_path)
+    H, wavelengths = open_datacube(refl_cube_path)
+    H_t = H.transpose(1, 2, 0)  
     # Get a batch to determine the number of spectral bands
     first_batch = next(iter(train_dl))
     n_bands = first_batch[0].shape[1]  # Number of spectral bands
     config = get_config()
     metrics = MetricsLogger()
 
-    
+    torch.autograd.set_detect_anomaly(True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+     # Initialize the decoder matrix E as endmembers from VCA
+    ems, _ = extract_endmembers(H_t, wavelengths, algorithm='vca', n_endmembers=4, show_endmembers=False, show_amaps=False)
+    print("VCA done")
+    print(H_t.shape, wavelengths.shape, ems.shape) # type: ignore
     model = VAE(
         input_dim=n_bands,  # Number of bands
         hidden_dim=config.hidden_dim,
-        latent_dim=config.latent_dim
+        latent_dim=4,
+        em_spectra=ems,
     ).to(device)
 
     model = torch.compile(model)  # For PyTorch 2.0+ graph optimizations
@@ -43,10 +46,10 @@ def main():
     patience_cntr = 0
     best_model_state = None
     best_test_loss = float('inf')
-    recon_loss = torch.nn.HuberLoss()
     print("The Training Begins !")
     sleep(0.5)
 
+    w_recon, w_mv, w_sid, w_ent = 1, 1, 1, 0 # Weights for the losses
     for epoch in range(config.epochs):
         metrics.reset_epoch()
 
@@ -60,27 +63,30 @@ def main():
 
             mean, log_var = model.encode(x)
             z = model.sample(mean, log_var)
-            recon = model.decode(z)
+            x_hat, E_positive = model.decode(z)
 
-            recon_loss_term = recon_loss(recon, x)
+            recon_loss_term = spectral_angle_distance_loss(x_hat, x)
+            sid_loss_term = spectral_information_divergence_loss(x_hat, x)
+            entropy_loss_term = entropy_loss(z)
             kl_pd = 0.5 * (torch.exp(log_var) + mean**2 - 1 - log_var)  # shape (B, L)
             # clamp each dimension to at least free_bits
             kl_fb = torch.clamp(kl_pd, min=config.free_bits)
             kl_loss = kl_fb.sum(dim=1).mean()    
-            loss = recon_loss_term + config.beta * kl_loss
+            loss = w_recon*recon_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term + config.beta * kl_loss
 
             loss.backward()
             optim.step()
 
-            metrics.update('train', loss.item(), recon_loss_term.item(), kl_loss.item())
+            metrics.update(phase='train', total=loss.item(), recon=recon_loss_term.item(), kl=kl_loss.item(), sid=sid_loss_term.item(), homology=entropy_loss_term.item()) # store entropy in metrics under homology as surrogate
+
             if i % config.update_interval == 0:
                 train_pbar.set_postfix({
-                    "loss": "{:.4f}".format(loss.item()),
+                    "loss": "{:.5f}".format(loss.item()),
                     "reconstruction": "{:.4f}".format(recon_loss_term.item()),
-                    "kl": "{:.4f}".format(kl_loss),
+                    "kl_loss": "{:.4f}".format(kl_loss.item()),
+                    "sid_loss": "{:.4f}".format(sid_loss_term.item()),
+                    "entropy": "{:.4f}".format(entropy_loss_term.item())
                 })
-                if math.isnan(loss.item()):
-                    raise ValueError("Loss went to nan.")
 
         # EVALUATION
         model.eval()
@@ -91,21 +97,27 @@ def main():
 
                 mean, log_var = model.encode(x)
                 z = model.sample(mean, log_var)
-                recon = model.decode(z)
+                x_hat, E_positive = model.decode(z)
 
-                recon_loss_term = recon_loss(recon, x)
+                recon_loss_term = spectral_angle_distance_loss(x_hat, x)
+                sid_loss_term = spectral_information_divergence_loss(x_hat, x)
+                entropy_loss_term = entropy_loss(z)
                 kl_pd = 0.5 * (torch.exp(log_var) + mean**2 - 1 - log_var)  # shape (B, L)
-            # clamp each dimension to at least free_bits
+                # clamp each dimension to at least free_bits
                 kl_fb = torch.clamp(kl_pd, min=config.free_bits)
                 kl_loss = kl_fb.sum(dim=1).mean()    
-                loss = recon_loss_term + config.beta * kl_loss
+                loss = w_recon*recon_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term + config.beta * kl_loss
 
-                metrics.update('val', loss.item(), recon_loss_term.item(), kl_loss.item())
-                test_pbar.set_postfix({
-                    "loss": "{:.4f}".format(loss.item()),
-                    "reconstruction": "{:.4f}".format(recon_loss_term.item()),
-                    "kl": "{:.4f}".format(kl_loss.item()),
-                })
+                metrics.update(phase='val', total=loss.item(), recon=recon_loss_term.item(), kl=kl_loss.item(), sid=sid_loss_term.item(), homology=entropy_loss_term.item()) # store entropy in metrics under homology as surrogate
+
+                if i % config.update_interval == 0:
+                    test_pbar.set_postfix({
+                        "loss": "{:.5f}".format(loss.item()),
+                        "reconstruction": "{:.4f}".format(recon_loss_term.item()),
+                        "kl_loss": "{:.4f}".format(kl_loss.item()),
+                        "sid_loss": "{:.4f}".format(sid_loss_term.item()),
+                        "entropy": "{:.4f}".format(entropy_loss_term.item())
+                    })
 
 
         avg_test_loss = metrics.finalize_epoch('val')
@@ -121,7 +133,6 @@ def main():
         if patience_cntr >= config.early_stop:
             print(f"Early stopping at epoch {epoch+1}")
             break
-    plot_losses(metrics, "vae_loss_plots")
     return model, best_model_state,  metrics   
 
 if __name__ == "__main__":
@@ -139,5 +150,6 @@ if __name__ == "__main__":
         'config': get_config(),
         'timestamp': timestamp
     }
-    torch.save(state, f'models/model_state_vae_{timestamp}.pth')
+    torch.save(state, f'models/model_state_vae_unmix_{timestamp}.pth')
     print("Best model saved to 'models'.")
+    plot_losses(metrics, "vae_loss_plots")

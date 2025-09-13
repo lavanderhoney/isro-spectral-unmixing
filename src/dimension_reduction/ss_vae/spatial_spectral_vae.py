@@ -7,6 +7,8 @@ This file will include the complete forward pass of the model.
 # %%
 import torch
 import torch.nn as nn
+import numpy as np
+import torch.nn.functional as F
 from typing import Tuple
 from .spectral_encoder import SpectralEncoder
 from .local_sensing import LocalSensingNet
@@ -15,7 +17,7 @@ from .utils import extract_sequential_data, extract_spectral_data
 from .loss import homology_loss, kl_loss, reconstruction_loss
 
 class SpatialSpectralEncoder(nn.Module):
-    def __init__(self, n_bands: int, patch_size: int, ld: int, hidden_dim: int, lstm_layers: int=3, cnn_layers: int =3, free_bits: float =0.0):
+    def __init__(self, n_bands: int, patch_size: int, ld: int, hidden_dim: int, lstm_layers: int=3, cnn_layers: int =3, free_bits: float =0.0, constraint: str = 'softmax', scaling: float = 1.5) -> None:
         super().__init__()
         self.n_bands = n_bands
         self.s = patch_size
@@ -31,7 +33,8 @@ class SpatialSpectralEncoder(nn.Module):
         
         self.homology_loss_term: torch.Tensor
         self.kl_loss_term: torch.Tensor
-
+        self.constraint = constraint
+        self.beta = scaling
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -58,62 +61,73 @@ class SpatialSpectralEncoder(nn.Module):
         std = torch.exp(0.5 * log_var)
         epsilon = torch.randn_like(std)
         latent_vector = std * epsilon + revised_mean # (batch, ld)
-        
+        if self.constraint == 'softmax':
+            latent_vector = F.softmax(latent_vector/self.beta, dim=1)  # too aggressive
         return latent_vector, revised_mean, log_var
 
 class SpatialSpectralDecoder(nn.Module):
-    def __init__(self, n_bands:int, ld: int, hidden_dim: int) -> None:
+    def __init__(self, em_spectra: np.ndarray, ) -> None:
         super().__init__()
-        self.n_bands = n_bands
-        self.ld = ld
-        self.hidden_dim = hidden_dim
+        # self.n_bands = n_bands
+        # self.ld = ld
+        # self.hidden_dim = hidden_dim
         
          # Decoder layers
-        self.dec_linear1 = nn.Linear(self.ld, self.hidden_dim)
-        self.dec_ln1 = nn.LayerNorm(self.hidden_dim)
-        self.dec_act1 = nn.LeakyReLU()
-        self.dec_linear2 = nn.Linear(self.hidden_dim, self.hidden_dim)
-        self.dec_ln2 = nn.LayerNorm(self.hidden_dim)
-        self.dec_act2 = nn.LeakyReLU()
-        self.dec_linear3 = nn.Linear(self.hidden_dim, self.n_bands)
+        # self.dec_linear1 = nn.Linear(self.ld, self.hidden_dim)
+        # self.dec_ln1 = nn.LayerNorm(self.hidden_dim)
+        # self.dec_act1 = nn.LeakyReLU()
+        # self.dec_linear2 = nn.Linear(self.hidden_dim, self.hidden_dim)
+        # self.dec_ln2 = nn.LayerNorm(self.hidden_dim)
+        # self.dec_act2 = nn.LeakyReLU()
+        # self.dec_linear3 = nn.Linear(self.hidden_dim, self.n_bands)
+        E_tensor = torch.from_numpy(em_spectra).float()
+        self.E = nn.Parameter(E_tensor, requires_grad=False)
       
     def decode(self, z):
         # First block
-        z = self.dec_linear1(z)
-        z = self.dec_ln1(z)
-        z = self.dec_act1(z)
-        z_skip = z  # Save for skip connection
+        # z = self.dec_linear1(z)
+        # z = self.dec_ln1(z)
+        # z = self.dec_act1(z)
+        # z_skip = z  # Save for skip connection
         
-        # Second block with skip connection
-        z = self.dec_linear2(z)
-        z = self.dec_ln2(z)
-        z = self.dec_act2(z)
-        z = z + z_skip  # Add skip connection
+        # # Second block with skip connection
+        # z = self.dec_linear2(z)
+        # z = self.dec_ln2(z)
+        # z = self.dec_act2(z)
+        # z = z + z_skip  # Add skip connection
         
-        # Output layer
-        out = self.dec_linear3(z)
-        return out
+        # # Output layer
+        # out = self.dec_linear3(z)
+        # return out
+        E_positive = F.relu(self.E)
+        x_hat = torch.matmul(z, E_positive)  # z (batch_size, M) * E (M, N) -> x_hat (batch_size, N)
+        # x_hat = F.relu(x_hat)  # Ensure non-negativity of the output
+        return x_hat, E_positive
     
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         """
         takes in the latent_vector from the encoder, and returns the reconstructed pixel spectra 
         """
-        recon_spectra = self.decode(x)
+        recon_spectra, E_positive = self.decode(x) # we will use E_positive for blind unmixing (when calculating MV regularization )
         return recon_spectra
     
 class SpatialSpectralNet(nn.Module):
-    def __init__(self, n_bands: int, patch_size: int, ld: int, hidden_dim: int, lstm_layers: int=3, cnn_layers: int =3, free_bits: float =0.0):
+    def __init__(self, n_bands: int, patch_size: int, ld: int, hidden_dim: int, em_spectra:np.ndarray, lstm_layers: int=3, cnn_layers: int =3, free_bits: float =0.0):
         super().__init__()
         self.spectral_bands = n_bands
         self.encoder = SpatialSpectralEncoder(n_bands, patch_size, ld, hidden_dim, lstm_layers, cnn_layers, free_bits)
-        self.decoder = SpatialSpectralDecoder(n_bands, ld, hidden_dim)
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.decoder = SpatialSpectralDecoder(em_spectra)
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         x: (batch_size, s, s, B)
+        Returns:
+        - z: Sampled latent vector
+        - mean: Revised mean vector from the encoder
+        - x_hat: Reconstructed pixel spectra
         """
         z, mean, log_var = self.encoder(x)
-        return self.decoder(z)
+        return z, mean, self.decoder(z)
     
     
 # %%

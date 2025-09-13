@@ -6,6 +6,9 @@ from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
 from dimension_reduction.ss_vae.dataloaders import get_dataloaders_ssvae
 from dimension_reduction.ss_vae.visualization import plot_losses
 from dimension_reduction.ss_vae.utils import extract_spectral_data
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacube
+from mineral_analysis.endmember_extraction import extract_endmembers
+from mineral_analysis.unmixing.ae import spectral_angle_distance_loss, spectral_information_divergence_loss, entropy_loss
 from tqdm import tqdm
 import math
 import torch
@@ -18,18 +21,24 @@ import torch.nn as nn
 def main(config):
     metrics = MetricsLogger()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
+    train_dl, test_dl, wavelengths = get_dataloaders(refl_cube_path)
+    H, wavelengths = open_datacube(refl_cube_path)
+    H_t = H.transpose(1, 2, 0)
     train_dl, test_dl = get_dataloaders_ssvae(config.data_path, config.batch_size, config.patch_size, config.test_size) 
     print("Dataloaders created !")
     #%%
+    ems, _ = extract_endmembers(H_t, wavelengths, algorithm='vca', n_endmembers=4, show_endmembers=False, show_amaps=False)
+    print("VCA done")
     model = SpatialSpectralNet(
         train_dl.dataset.__getattribute__('B'),  # number of spectral bands
         config.patch_size,  
-        config.latent_dim,
+        4,
         config.hidden_dim,
-        config.lstm_layers,
-        config.cnn_layers,
-        config.free_bits
+        em_spectra=ems,
+        lstm_layers=config.lstm_layers,
+        cnn_layers=config.cnn_layers,
+        free_bits=config.free_bits
     ).to(device)
     # Wrap in torch.compile for PyTorch 2.0+ graph optimizations
     model = torch.compile(model)  
@@ -42,8 +51,8 @@ def main(config):
     best_model_state = None
     # best_test_loss = float('inf')
     best_test_loss = float('inf')
-    recon_loss = nn.MSELoss()
-
+    # recon_loss = nn.MSELoss()
+    w_recon, w_hm, w_sid, w_ent = 1, 1, 1, 0
     for epoch in range(config.epochs):
 
         metrics.reset_epoch()
@@ -56,15 +65,16 @@ def main(config):
             optimizer.zero_grad()
 
             model.train()
-            recon = model(x)
+            z, mean, recon = model(x)
             input_spectra = extract_spectral_data(x)
-            recon_loss_term = recon_loss(recon, input_spectra)
-
+            
+            recon_loss_term = spectral_information_divergence_loss(recon, input_spectra)
+            sid_loss_term = spectral_angle_distance_loss(recon, input_spectra)
+            entropy_loss_term = entropy_loss(z)
             kl_loss = model.encoder.kl_loss_term
             homology_loss = model.encoder.homology_loss_term
 
-            loss = recon_loss_term + config.beta*kl_loss + homology_loss #beta-VAE
-
+            loss = w_recon*recon_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term + config.beta * kl_loss + w_hm*homology_loss
             loss.backward()
             optimizer.step()
 
@@ -76,6 +86,7 @@ def main(config):
                     "loss": "{:.4f}".format(loss.item()),
                     "reconstruction": "{:.4f}".format(recon_loss_term.item()),
                     "kl": "{:.4f}".format(kl_loss),
+                    "sid_loss": "{:.4f}".format(sid_loss_term.item()),
                     "homology": "{:.4f}".format(homology_loss),
                 })
                 if math.isnan(loss.item()):
@@ -87,20 +98,22 @@ def main(config):
         for x in test_pbar:
             x=x.float().to(device)
             with torch.inference_mode():
-                recon = model(x)
+                z, mean, recon = model(x)
                 input_spectra = extract_spectral_data(x)
-                recon_loss_term = recon_loss(recon, input_spectra)
-
+                recon_loss_term = spectral_information_divergence_loss(recon, input_spectra)
+                sid_loss_term = spectral_angle_distance_loss(recon, input_spectra)
+                entropy_loss_term = entropy_loss(z)
                 kl_loss = model.encoder.kl_loss_term
                 homology_loss = model.encoder.homology_loss_term
 
-                loss = recon_loss_term + config.beta*kl_loss + homology_loss #beta-VAE
+                loss = w_recon*recon_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term + config.beta * kl_loss + w_hm*homology_loss
                 metrics.update('val', loss.item(), recon_loss_term.item(), kl_loss.item(), homology_loss.item())
 
             test_pbar.set_postfix({
                     "loss": "{:.4f}".format(loss.item()),
                     "reconstruction": "{:.4f}".format(recon_loss_term.item()),
                     "kl": "{:.4f}".format(kl_loss),
+                    "sid_loss": "{:.4f}".format(sid_loss_term.item()),
                     "homology": "{:.4f}".format(homology_loss),
                 })
 

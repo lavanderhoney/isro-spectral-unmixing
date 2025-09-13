@@ -6,8 +6,11 @@ def plot_losses(metrics, save_path="src/dimension_reduction/ss_vae/training_runs
     loss_types = ['total', 'recon']
     reg = [reg_losses[i] for i in range(len(reg_losses)) if metrics.regularization_losses[i]]
     loss_types += reg
-
-    fig, axs = plt.subplots(2, 2, figsize=(15, 10))
+    
+    print("Metrics: ", metrics.history.keys())
+    print(metrics.history['train'])
+    print(metrics.history['val'])
+    fig, axs = plt.subplots(3, 3, figsize=(15, 10))
     axs = axs.flatten()
     
     for i, loss_type in enumerate(loss_types):
