@@ -164,17 +164,18 @@ def get_dataloaders(data_path: str,
 # %%
 if __name__ == "__main__":
     
-    config = get_config()
-    config.data_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'  # Set the data path to the denoised reflectance data
-    train_loader, test_loader = get_dataloaders_ssvae(config.data_path, batch_size=32)
-    for batch in train_loader:
-        print("Batch shape:", batch.shape)  # (batch_size, s, s, B)
-        break
+    cube, wavelength = open_datacube("/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz")
+    # config = get_config()
+    # config.data_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'  # Set the data path to the denoised reflectance data
+    # train_loader, test_loader = get_dataloaders_ssvae(config.data_path, batch_size=32)
+    # for batch in train_loader:
+    #     print("Batch shape:", batch.shape)  # (batch_size, s, s, B)
+    #     break
     
-    train_dl, test_dl, _ = get_dataloaders(config.data_path, batch_size=32)
-    for batch in train_dl:
-        print("Batch shape for get_dataloaders:", batch[0].shape)  # (batch_size, B)
-        break
+    # train_dl, test_dl, _ = get_dataloaders(config.data_path, batch_size=32)
+    # for batch in train_dl:
+    #     print("Batch shape for get_dataloaders:", batch[0].shape)  # (batch_size, B)
+    #     break
     # np.savez_compressed('den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz', den_refl_data=refl_data, wavelengths=wavelengths)
     # print("Denoised reflectance data saved to 'den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'")
 

@@ -9,7 +9,7 @@ from datetime import datetime
 
 # --- Import components from your project ---
 from dimension_reduction.ss_vae.config import get_config
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders_ssvae
 from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
 from dimension_reduction.ss_vae.utils import extract_spectral_data
 
@@ -51,7 +51,7 @@ def objective(trial: optuna.trial.Trial) -> float:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Ensure dataloaders are created for each trial if parameters like batch_size change
-    train_dl, test_dl = get_dataloaders(config.data_path, config.batch_size, config.patch_size)
+    train_dl, test_dl = get_dataloaders_ssvae(config.data_path, config.batch_size, config.patch_size)
 
     model = SpatialSpectralNet(
         train_dl.dataset.__getattribute__('B'),
@@ -129,7 +129,7 @@ def objective(trial: optuna.trial.Trial) -> float:
 
     # --- 4. Return the final metric to be optimized ---
     return best_test_loss
-
+#{'lr': 0.0002515896352501719, 'latent_dim': 64, 'hidden_dim': 256, 'beta': 0.0012179740959594061, 'lstm_layers': 5, 'cnn_layers': 5, 'patch_size': 7}. Best is trial 12 with value: 0.01869354480006321.
 
 if __name__ == "__main__":
     # The Pruner stops unpromising trials early.

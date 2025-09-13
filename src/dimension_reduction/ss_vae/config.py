@@ -1,5 +1,5 @@
 import argparse
-
+import sys
 def get_config()-> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Spatial-Spectral VAE Training')
     
@@ -27,4 +27,8 @@ def get_config()-> argparse.Namespace:
     parser.add_argument('--early_stop', type=int, default=5, help='Early stopping patience')
     parser.add_argument("--scheduler_patience", type=int, default=3, help='Scheduler patience for learning rate reduction')
     
-    return parser.parse_args()
+    if "ipykernel" in sys.argv[0] or "spyder" in sys.argv[0]:
+        # Running in Jupyter or VSCode interactive
+        return parser.parse_args([])  # use defaults when parsing in interactive mode, i.e treat if as if no command-line arguments given (hence [] is empty)
+    else:
+        return parser.parse_args()

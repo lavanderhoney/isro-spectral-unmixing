@@ -9,6 +9,8 @@ from matplotlib import pyplot as plt
 from dimension_reduction.ss_vae.config import get_config
 from mineral_analysis.endmember_extraction import extract_endmembers
 from dimension_reduction.inference_utils import get_recon_spectra
+from dimension_reduction.inference_utils import extract_latent_vectors
+from mineral_analysis import endmember_extraction as eea
 from sklearn.preprocessing import StandardScaler
 #%%
 def show_recon_image(
@@ -139,9 +141,9 @@ def extract_endmembers_from_latent(latent_vectors: np.ndarray, wavelengths: np.n
     return endmembers  # Return only the endmembers
     
 if __name__ == "__main__":
-    data_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_m3g20090729t104424_v01_rfl.npz"
-    ss_vae_path = "models/model_state_ss_vae_0609_035249.pth"
-    vae_path = "models/model_state_vae_0609_045053.pth"
+    data_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz"
+    ss_vae_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_ss_vae_0731_070802.pth"
+    vae_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_vae_unmix_0724_102754.pth"
 
     data = np.load(data_path)
     data_cube = data['den_refl_data']
@@ -154,12 +156,22 @@ if __name__ == "__main__":
 
     H_t = data_cube.transpose(1, 2, 0) # Transpose to (rows, cols, bands)
     input_data = H_t.reshape(-1, n_bands) # Reshape to (H*W, n_bands)
-    scaler = StandardScaler()
-    input_data = scaler.fit_transform(input_data)  # Normalize the data
 
-    # Extract latent vectors using the ss-vae model
-    # latent_vectors = extract_latent_vectors('vae', vae_path, input_data)
-    # print("Latent vectors shape:", latent_vectors.shape)
+    configs = get_config()
+    # latent_vectors = extract_latent_vectors('vae', vae_path, input_data, config=configs)
+    # print("Latent vectors shape:", latent_vectors.shape) # (H*W, latent_dim)
+    # amaps = latent_vectors.reshape(rows, cols, -1)  # Reshape to (rows, cols, latent_dim)
+    # print("amaps of VAE: ", amaps.shape)
+    # eea.plot_amaps(amaps, H_t, wavelengths, "VAE", target_wl=750)
+    
+    #SS-VAE
+    latent_vectors = extract_latent_vectors('ss-vae', ss_vae_path, input_data, config=configs)
+    print("Latent vectors shape:", latent_vectors.shape) # (H*W, latent_dim)
+    ss_rows, ss_cols = 997, 246  # because ss-vae is trained on a center-cropped image, and ignores border because of the lstm or cnn part
+    amaps = latent_vectors.reshape(ss_rows, ss_cols, -1)  # Reshape to (rows, cols, latent_dim)
+    print("amaps of SS-VAE: ", amaps.shape)
+    eea.plot_amaps(amaps, H_t, wavelengths, "SS-VAE", target_wl=750)
+    #Display amaps of latent vectors
     
     # Extract endmembers from the latent vectors
     # endmembers = extract_endmembers_from_latent(latent_vectors, wavelengths, algorithm='nfindr', rows=rows, cols=cols, n_endmembers=4, )
@@ -168,13 +180,13 @@ if __name__ == "__main__":
     
     # Model's sanity check
     # print("Now with normalized input data")
-    # show_recon_image('ss-vae', ss_vae_path, input_data, rows, cols, n_samples=3)
+    show_recon_image('ss-vae', ss_vae_path, input_data, rows, cols, n_samples=3)
     # show_recon_image('vae', vae_path, input_data,rows, cols, n_samples=3)
 
-    print("Unmixing AE check")
-    model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_M3_state_ae_scaling0713_123502.pth"
-    from mineral_analysis.unmixing.analyse_ae import recon_np
-    #%%
-    show_recon_image('vae', model_path, H_t.reshape(-1, n_bands), H_t.shape[0], H_t.shape[1], 5, recon_np)
+    # print("Unmixing AE check")
+    # model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_M3_state_ae_scaling0713_123502.pth"
+    # from mineral_analysis.unmixing.analyse_ae import recon_np
+    # #%%
+    # show_recon_image('vae', model_path, H_t.reshape(-1, n_bands), H_t.shape[0], H_t.shape[1], 5, recon_np)
 
 # %%
