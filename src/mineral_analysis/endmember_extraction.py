@@ -172,21 +172,24 @@ def extract_endmembers(H_t: np.ndarray,
 
 #%%
 if __name__ == "__main__":
-    # Example usage
-    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_ch2_iir_nci_20210620T2110364457_d_img_hw1.npz'
+    # refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_ch2_iir_nci_20210620T2110364457_d_img_hw1.npz'
+    # refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20211214T2146149094_d_img_hw1.npz'
+    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz'
 
     unloaded = np.load(refl_cube_path)
     H = unloaded['den_refl_data']
-    if 'wavelengths' in unloaded:
-        wavelengths = unloaded['wavelengths']
-    else:
-        wave = np.load('/teamspace/studios/this_studio/isro-spectral-unmixing/data/m3_wavelengths_Copy of m3g20090729t104424.npz', allow_pickle=True)
-        wavelengths = wave.get('wavelengths', None)
+    wavelengths = unloaded['wavelengths']
+    # if 'wavelengths' in unloaded:
+    # else:
+    #     wave = np.load('/teamspace/studios/this_studio/isro-spectral-unmixing/data/m3_wavelengths_Copy of m3g20090729t104424.npz', allow_pickle=True)
+    #     wavelengths = wave.get('wavelengths', None)
     H_t = np.moveaxis(H, 0, 2)  # Shape: (rows, cols, bands)
     H_t = H_t.astype('float32')
     ems, amap = extract_endmembers(H_t, wavelengths, algorithm='vca', n_endmembers=4)
     plot_endmembers(ems, wavelengths, title="VCA Endmember Spectra", algorithm_name="VCA")
 
+    np.save("/teamspace/studios/this_studio/isro-spectral-unmixing/data/vca_ch2_iir_nci_20191208T1407123802_d_img_d18.npy", ems)
+    print("VCA EMs saved")
     #DONT normalize the cube, it distorts the results apparently
     # rows, cols, bands = H_t.shape
     # X_flat = H_t.reshape(rows*cols, bands)

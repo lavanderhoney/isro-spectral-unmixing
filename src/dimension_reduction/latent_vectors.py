@@ -20,6 +20,7 @@ def show_recon_image(
     rows: int,
     cols: int,
     n_samples: int = 3,
+    data_path: Optional[str] = None,
     recon_np: Optional[np.ndarray] = None,
 ) -> None:
     """
@@ -42,8 +43,8 @@ def show_recon_image(
         recon_np = get_recon_spectra(
             model_name=model_name,
             model_path=model_path,
-            input_data=input_data,
             config=get_config(),
+            data_path=data_path, # type: ignore
         )
 
     # Reshape input for plotting
@@ -165,7 +166,7 @@ if __name__ == "__main__":
     # eea.plot_amaps(amaps, H_t, wavelengths, "VAE", target_wl=750)
     
     #SS-VAE
-    latent_vectors = extract_latent_vectors('ss-vae', ss_vae_path, input_data, config=configs)
+    latent_vectors = extract_latent_vectors('ss-vae', ss_vae_path, input_data, data_path=data_path)
     print("Latent vectors shape:", latent_vectors.shape) # (H*W, latent_dim)
     ss_rows, ss_cols = 997, 246  # because ss-vae is trained on a center-cropped image, and ignores border because of the lstm or cnn part
     amaps = latent_vectors.reshape(ss_rows, ss_cols, -1)  # Reshape to (rows, cols, latent_dim)

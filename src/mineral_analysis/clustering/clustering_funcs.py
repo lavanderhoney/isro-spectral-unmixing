@@ -100,17 +100,12 @@ def plot_and_eval(H, k, labels_image, algorithm_name, img_type: Literal['origina
     plt.title(f"{img_type} {algorithm_name} Clustering Results (k={k})")
     plt.axis('off')
     plt.show()
-    timestamp = datetime.now().strftime("%m%d_%H%M%S")
-    if model_name:
-        plt.savefig(f"{img_type}_{model_name}_{algorithm_name}_clustering_k{k}_{timestamp}.png", bbox_inches='tight')
-    else:
-        plt.savefig(f"{img_type}_{algorithm_name}_clustering_k{k}_{timestamp}.png", bbox_inches='tight')
-
     return rgb_image
 
 # %%
 if __name__ == "__main__":
-    data_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_ch2_iir_nci_20210620T2110364457_d_img_hw1.npz'
+    data_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz'
+    # data_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz'
     H, wavelengths = open_datacube(data_path)
     print("Data loaded:", H.shape, wavelengths.shape) #type:ignore
     
@@ -127,18 +122,21 @@ if __name__ == "__main__":
     _ = plot_and_eval(H, 4, kmeans_labels, "KMeans")
     
     print("Clustering of abundance maps from AE")
-    model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_ae_scaling0713_113510.pth"
-    from mineral_analysis.unmixing.analyse_ae import recon_np
-    kmeans_labels, score = kmeans_clustering(recon_np, n_clusters=4, rows=rows, cols=cols)
+    from mineral_analysis.unmixing.analyse_ae import abundance_vecs
+    kmeans_labels, score = kmeans_clustering(abundance_vecs, n_clusters=4, rows=rows, cols=cols)
     plot_and_eval(H,4, kmeans_labels, "KMeans AE", img_type='latent', model_name='ae')
     print("KMeans clustering on AE abundance maps completed.", kmeans_labels.shape)
     print("Silhouette Score for AE abundance maps:", score)
 
-    # gmm_labels = gmm_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
-    # print("GMM clustering completed.", gmm_labels.shape)
-    # print("Silhouette Score for GMM:", silhouette_score(X_flat, gmm_labels.flatten()))
-    # plot_and_eval(H, 4, gmm_labels, "GMM")
+    gmm_labels = gmm_clustering(X_flat, n_clusters=4, rows=rows, cols=cols)
+    print("GMM clustering completed.", gmm_labels.shape)
+    print("Silhouette Score for GMM:", silhouette_score(X_flat, gmm_labels.flatten()))
+    plot_and_eval(H, 4, gmm_labels, "GMM")
     
+    latent_gmm_labels = gmm_clustering(abundance_vecs, n_clusters=4, rows=rows, cols=cols)
+    print("GMM clustering on latent vectors completed.", latent_gmm_labels.shape)
+    print("Silhouette Score for latent vectors:", silhouette_score(abundance_vecs, latent_gmm_labels.flatten()))
+    plot_and_eval(H, 4, latent_gmm_labels, "GMM Latent", img_type='latent', model_name='vae')
     #------------- VAE Latent Clustering -------------
     # print("Extracting latent vectors from VAE model...")
     # latent_vectors_vae = extract_latent_vectors('vae', 'models/model_state_vae_0609_045053.pth', X_flat_norm)

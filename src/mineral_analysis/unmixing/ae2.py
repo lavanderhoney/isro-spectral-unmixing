@@ -5,8 +5,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from typing import Tuple, Literal
 #%%
-class AE(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int, latent_dim: int, em_spectra, constraint: Literal['softmax', 'man'] = 'softmax', scaling: float = 0.8) -> None:
+class AE2(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int, latent_dim: int,constraint: Literal['softmax', 'man'] = 'softmax', scaling: float = 0.8) -> None:
         super().__init__()
         # Encoder layers
         self.enc_linear1 = nn.Linear(input_dim, hidden_dim) #109,64
@@ -28,8 +28,10 @@ class AE(nn.Module):
         # Learnable or Fixed Endmember Matrix E
         # latent_dim is M (number of endmembers)
         # input_dim is N (number of spectral bands)
-        E_tensor = torch.from_numpy(em_spectra).float()
-        self.E = nn.Parameter(E_tensor, requires_grad=False)  # M x N matrix
+        # E_tensor = torch.from_numpy(em_spectra).float()
+        # self.E = nn.Parameter(E_tensor, requires_grad=False)  # M x N matrix
+        self.decoder_output_layer = nn.Linear(latent_dim, input_dim) # M, N
+        self.dec_act1 = nn.ReLU()  # Ensure non-negativity of the output
         self.constraint = constraint  # 'softmax' or 'man'(i.e, manual normalization)
         self.beta = scaling
 
@@ -64,24 +66,22 @@ class AE(nn.Module):
         # z: (batch_size, M)
         # E: (M, N)
         # Output: (batch_size, N)
-        E_positive = F.relu(self.E)
-        assert not torch.isnan(E_positive).any(), "NaN in E_positive"
-        assert not torch.isnan(z).any(), "NaN in z"
-        x_hat = torch.matmul(z, E_positive)  # z (batch_size, M) * E (M, N) -> x_hat (batch_size, N)
+
+        x_hat = self.decoder_output_layer(z)  # z (batch_size, M) * E (M, N) -> x_hat (batch_size, N)
+        x_hat = self.dec_act1(x_hat)
         # x_hat = F.relu(x_hat)  # Ensure non-negativity of the output
         if torch.isnan(x_hat).any() or torch.isinf(x_hat).any():
             print("DEBUG: NaN/Inf in x_hat")
             print("z stats:", torch.min(z).item(), torch.max(z).item(), torch.mean(z).item())
-            print("E_positive stats:", torch.min(E_positive).item(), torch.max(E_positive).item(), torch.mean(E_positive).item())
             raise RuntimeError("NaN/Inf detected in x_hat")
-        return x_hat, E_positive
+        return x_hat
       
 
     def forward(self, x):
         # Encoder part
         z = self.encode(x)
-        x_hat, E_positive = self.decode(z)
-        return x_hat, z, E_positive
+        x_hat = self.decode(z)
+        return x_hat, z
 
 #loss functions
 def spectral_angle_distance_loss(x_hat: torch.Tensor, x: torch.Tensor, eps:float = 1e-8) -> torch.Tensor:

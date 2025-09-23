@@ -1,0 +1,45 @@
+- **model_state_ae_scaling0701_050635.pth**
+    - for data: den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz
+    - THE SUCCESSFUL MODEL
+    - model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - softmax constraints, scaling=0.8 (default)
+    - avg recon: 0.01547, 
+    - silhouette: 0.7976 (on amaps), silhouette on original: 0.76
+
+- **model_state_ae_scaling0713_113510.pth**
+    - SUCCESSFUL MODEL for data: den_georef_ch2_iir_nci_20210620T2110364457_d_img_hw1.npz
+    - model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - softmax constraints, scaling=0.8
+    - avg recon: 0.0334, 
+    - silhouette: 0.77 (on amaps), silhouette on original: 0.76
+    - gmm og silhouette: 0.01, latent vectors 0.11
+
+- **model_state_ae_scaling0920_180122.pth**
+    - SUCCESSFUL MODEL for data : den_reflectance_ch2_iir_nci_20211214T2146149094_d_img_hw1.npz
+    - model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - softmax constraints, scaling=1.1
+    - avg recon: 0.0327, 
+    - silhouette: 0.815 (on amaps), silhouette on original: 0.91
+    - gmm og silhouette: 0.24, latent vectors 0.49
+
+- **model_state_ae_scaling0920_185943.pth**
+    - SUCCESSFUL MODEL for data : den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz
+    - model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - softmax constraints, scaling=1
+    - avg recon: 0.036, 
+    - silhouette: 0.90 (on amaps), silhouette on original: 0.77
+    - gmm og silhouette: 0.13, latent vectors 0.53
+    
+- **model_state_ae_scaling0701_055120.pth**
+    - model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - for data: den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz

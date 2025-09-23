@@ -43,18 +43,16 @@ def main():
     # model = torch.compile(model)
 
     epoch_stage = 2 # train decoder after these epochs
-    encoder_params = [p for p in model.parameters() if p.requires_grad]
-    # print("Encoder parameters: ", encoder_params)
-    decoder_params = [p for p in model.parameters() if not p.requires_grad]
-    # print("Decoder parameters: ", decoder_params[0].shape)
-
-    model.E.requires_grad_(True)  # now that encoder and decoder(E) params are separated, we can do this, 
-                                    # and E will be trained after epoch_stage only.               
-    optim_encoder = torch.optim.Adam(encoder_params, lr=config.lr)
-    optim_decoder = torch.optim.Adam(decoder_params, lr=config.lr)
     
+    # Freeze decoder (E) initially. Better to keep it frozen until stage 2, if not, it accumaltes gradients which are not used. Also much cleaner code
+    model.E.requires_grad_(False)
+    
+    encoder_params = [p for p in model.parameters() if p is not model.E and p.requires_grad]
+    optim_encoder = torch.optim.Adam(encoder_params, lr=config.lr)
     scheduler_encoder = torch.optim.lr_scheduler.ReduceLROnPlateau(optim_encoder, patience=config.scheduler_patience, threshold=0.01)
-    scheduler_decoder = torch.optim.lr_scheduler.ReduceLROnPlateau(optim_decoder, patience=config.scheduler_patience, threshold=0.01)
+    
+    optim_decoder = None # will create later in the training loop
+    scheduler_decoder = None
     
     patience_cntr = 0
     best_model_state = None
@@ -72,11 +70,19 @@ def main():
         train_pbar = tqdm(train_dl, total=len(train_dl), desc=f"Epoch {epoch+1}/{config.epochs} [Train]")
         for i, x in enumerate(train_pbar):
             x = x[0].float().to(device)  # Extract the tensor from the tuple
+                        
+            # unfreeze and init the decoder only once (not checking with > condn)
+            if epoch == epoch_stage+1 and not model.E.requires_grad:
+                model.E.requires_grad_(True)
+                decoder_params = [model.E] # since this is the only param in decoder for now (LMM)
+                optim_decoder = torch.optim.Adam(decoder_params, lr=config.lr)
+                scheduler_decoder = torch.optim.lr_scheduler.ReduceLROnPlateau(optim_decoder, patience=config.scheduler_patience, threshold=0.01)
+                print("Decoder unfrozen and optimizer created.")
             
             optim_encoder.zero_grad()
-            if epoch > epoch_stage:
-                # print("Unfreezing decoder parameters: ", model.E.requires_grad)
+            if optim_decoder is not None:
                 optim_decoder.zero_grad()
+                
             try:
                 x_hat, z, E_positive = model(x)
             except Exception as e:
@@ -87,27 +93,39 @@ def main():
                         print(f"{name}: {param.shape} - {param}")
             assert not torch.isnan(x_hat).any(), "NaN in x_hat"
             assert not torch.isnan(x).any(), "NaN in x"
-            # print("z stats:",       z.min().item(),     z.max().item(),     z.abs().mean().item())
-            # print("E_positive stats:", 
-            #     E_positive.min().item(), E_positive.max().item())
             
             recon_loss_term = spectral_angle_distance_loss(x_hat, x)
             mv_loss_term = total_variation(E_positive)
             sid_loss_term = spectral_information_divergence_loss(x_hat, x)
             entropy_loss_term = entropy_loss(z)
-            loss = w_recon*recon_loss_term + w_mv* mv_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term
-            assert not torch.isnan(loss).any(), "NaN in loss"
             
+            loss = w_recon*recon_loss_term + w_mv* mv_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term
+            # assert not torch.isnan(loss).any(), "NaN in loss"
+            
+            if not torch.isfinite(loss):
+                print("DEBUG: loss is not finite:", loss)
+                # print breakdown of losses if you compute components:
+                print("reconstruction:", recon_loss_term.item(), "sid:", sid_loss_term.item(), "tv:", mv_loss_term.item(), "entropy:", entropy_loss_term.item())
+                # optionally save a small batch for inspection
+                torch.save({
+                    'x': x.detach().cpu(),
+                    'x_hat': x_hat.detach().cpu(),
+                    'z': z.detach().cpu(),
+                    'E_positive': E_positive.detach().cpu()
+                }, "debug_nan_batch.pt")
+                raise RuntimeError("Non-finite loss")
+
             loss.backward()
-            for name, param in model.named_parameters():
-                if torch.isnan(param).any() or torch.isinf(param).any() or torch.isnan(param.grad).any(): # type: ignore
-                    print(f"============={name}: {param.shape} - {param.grad}=============")
-                    print(f"Parameter {name} has NaN values.")
+            # for name, param in model.named_parameters():
+            #     if param is not None and torch.isnan(param).any() or torch.isinf(param).any() or torch.isnan(param.grad).any(): # type: ignore
+            #         print(f"============={name}: {param.shape} - {param.grad}=============")
+            #         print(f"Parameter {name} has NaN values.")
                     
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping to avoid exploding gradients
+            
             optim_encoder.step()
-            if epoch > epoch_stage:
-                optim_decoder.step()
+            if optim_decoder is not None:
+                optim_decoder.step() # type: ignore
 
             metrics.update(phase='train', total=loss.item(), recon=recon_loss_term.item(), mv=mv_loss_term.item(), sid=sid_loss_term.item(), homology=entropy_loss_term.item()) # store entropy in metrics under homology as surrogate
 
@@ -122,15 +140,15 @@ def main():
                 print(E_positive)
                 print(z)
                 print(x_hat)
-                for name, param in model.named_parameters():
-                    if torch.isnan(param).any():
-                        print(f"Parameter {name} has NaN values.")
+                # for name, param in model.named_parameters():
+                #     if torch.isnan(param).any():
+                #         print(f"Parameter {name} has NaN values.")
                 
-                print("Param gradients:")
-                for name, param in model.named_parameters():
-                    print(f"{name}: {param.shape} - {param.grad}")
+                # print("Param gradients:")
+                # for name, param in model.named_parameters():
+                #     print(f"{name}: {param.shape} - {param.grad}")
                 raise ValueError("Loss went to nan.")
-            avg_train_loss = metrics.finalize_epoch('train')\
+            avg_train_loss = metrics.finalize_epoch('train')
                 
         # EVALUATION
         model.eval()
@@ -140,10 +158,12 @@ def main():
                 x = x[0].float().to(device)
 
                 x_hat, z, E_positive = model(x)
+                
                 recon_loss_term = spectral_angle_distance_loss(x_hat, x)
                 mv_loss_term = total_variation(E_positive)
                 sid_loss_term = spectral_information_divergence_loss(x_hat, x)
                 entropy_loss_term = entropy_loss(z)
+                
                 loss = w_recon*recon_loss_term + w_mv* mv_loss_term + w_sid*sid_loss_term + w_ent*entropy_loss_term
 
                 metrics.update(phase='val', total=loss.item(), recon=recon_loss_term.item(), mv=mv_loss_term.item(), sid=sid_loss_term.item(), homology=entropy_loss_term.item())  # store entropy in metrics under homology as surrogate
@@ -159,7 +179,7 @@ def main():
         avg_test_loss = metrics.finalize_epoch('val')
         scheduler_encoder.step(avg_test_loss)
         
-        if epoch > epoch_stage:
+        if scheduler_decoder is not None and optim_decoder is not None:
             scheduler_decoder.step(avg_test_loss)
 
         if avg_test_loss < best_test_loss:

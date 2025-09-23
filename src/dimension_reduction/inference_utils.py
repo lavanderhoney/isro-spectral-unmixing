@@ -4,7 +4,7 @@ Extract the latent vectors.
 """
 import torch
 import numpy as np
-from typing import Literal, Union
+from typing import Literal, Union, Optional
 from argparse import Namespace
 from matplotlib import pyplot as plt
 from mineral_analysis.endmember_extraction import extract_endmembers
@@ -12,19 +12,22 @@ from dimension_reduction.vae.vae import VAE
 from dimension_reduction.ss_vae.dataloaders import get_dataloaders, get_dataloaders_ssvae
 from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
 from dimension_reduction.ss_vae.config import get_config
+from dimension_reduction.ss_vae.dataloaders import open_datacube
+from mineral_analysis.unmixing.ae import AE, spectral_angle_distance_loss
+from mineral_analysis import endmember_extraction as eea
 
 # config = get_config()
 
-def load_model_state_dict(model_name: Literal['vae', 'ss-vae'], model_path: str, n_bands: int) -> Union[VAE, SpatialSpectralNet]:
+def load_model_state_dict(model_name: Literal['ae','vae', 'ss-vae'], model_path: str, n_bands: int,  data_path:str, em_path: Optional[str]=None,) -> Union[AE, VAE, SpatialSpectralNet]:
+    state = torch.load(model_path, map_location='cpu', weights_only=False)
+    raw_state_dict = state['model_state'] if 'model_state' in state else state
+    # Remove '_orig_mod.' prefix from all keys
+    cleaned_state_dict = {
+        k.replace("_orig_mod.", ""): v
+        for k, v in raw_state_dict.items()
+    }
+    print("STATE DICT  :", cleaned_state_dict.keys())
     if model_name == 'ss-vae':
-        state = torch.load(model_path, map_location='cpu', weights_only=False)
-        raw_state_dict = state['model_state'] if 'model_state' in state else state
-
-        # Remove '_orig_mod.' prefix from all keys
-        cleaned_state_dict = {
-            k.replace("_orig_mod.", ""): v
-            for k, v in raw_state_dict.items()
-        }
         # print(cleaned_state_dict.keys())
         # print(state.keys())
         model_ss = SpatialSpectralNet(
@@ -40,14 +43,6 @@ def load_model_state_dict(model_name: Literal['vae', 'ss-vae'], model_path: str,
         model_ss.load_state_dict(cleaned_state_dict)
         return model_ss
     elif model_name == 'vae':
-        state = torch.load(model_path, map_location='cpu', weights_only=False)
-        raw_state_dict = state['model_state'] if 'model_state' in state else state
-
-        # Remove '_orig_mod.' prefix from all keys
-        cleaned_state_dict = {
-            k.replace("_orig_mod.", ""): v
-            for k, v in raw_state_dict.items()
-        }
         print(cleaned_state_dict.keys())
         model_vae = VAE(
             input_dim=n_bands,  # n_bands
@@ -57,26 +52,47 @@ def load_model_state_dict(model_name: Literal['vae', 'ss-vae'], model_path: str,
         )
         model_vae.load_state_dict(cleaned_state_dict)
         return model_vae
+    elif model_name == 'ae':
+        # Extract endmember spectra if present in the state dict, otherwise set to None or handle accordingly
+        if em_path:
+            ems = np.load(em_path)
+        else:
+            if data_path is None:
+                raise ValueError("data_path must be provided if em_path is not given.")
+            H, wavelengths = open_datacube(data_path)
+            H_t = H.transpose(1, 2, 0)
+            ems, _ = eea.extract_endmembers(H_t, wavelengths, algorithm='vca', n_endmembers=4, show_endmembers=False, show_amaps=False)
+        model_ae = AE(
+            input_dim=n_bands,  # Number of spectral bands
+            hidden_dim=state['config'].hidden_dim,
+            latent_dim=4,
+            em_spectra=ems,
+            scaling=state['config'].beta,
+        )
+        model_ae.load_state_dict(cleaned_state_dict)
+        model_ae.eval()
+        print(model_ae.beta, model_ae.constraint)
+        return model_ae 
 
-def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str, input_data: np.ndarray, config: Namespace) -> np.ndarray:
+def extract_latent_vectors(model_name: Literal['ae', 'vae', 'ss-vae'], model_path: str, config: Namespace, data_path:str, em_path: Optional[str]=None) -> np.ndarray:
     """
     Extract latent vectors from a model given the input data.
 
     Parameters:
     - model_name (str): Name of the model to be used for inference.
     - model_path (str): Path to the entire model file.
-    - input_data (np.ndarray): the pixel spectra (H*W, n_bands).
-
+    - config (Namespace): Configuration object containing model parameters.
+    - data_path (str, optional): Path to the input data file. Required for 'ss-vae' and 'ae' models.
+    - em_path (str, optional): Path to the endmember spectra file. Required for 'ae' model.
     Returns:
     - np.ndarray: Latent vectors extracted from the model.
     """
     print(">>> >Running latest extract_latent_vectors")
      # Set the model to evaluation mode
-    input_tensor = torch.from_numpy(input_data).float()
     if model_name == 'ss-vae':
-        model_ss = load_model_state_dict(model_name, model_path, input_data.shape[1])
+        model_ss = load_model_state_dict(model_name, model_path, n_bands=109, data_path=data_path)
         model_ss.eval()  # Set the model to evaluation mode
-        input_dl, _ = get_dataloaders_ssvae(data_path=config.data_path, batch_size=input_data.shape[0], neighborhood_size=5, test_size=0)
+        input_dl, _ = get_dataloaders_ssvae(data_path=data_path, neighborhood_size=5, test_size=0)
         for batch in input_dl:
             x=batch.float()
             print("in ssvae :", x.shape)
@@ -86,16 +102,34 @@ def extract_latent_vectors(model_name: Literal['vae', 'ss-vae'], model_path: str
 
         latent_vector = latent_vector.detach().numpy()
     elif model_name =='vae':
-        model_vae = load_model_state_dict(model_name, model_path, input_data.shape[1])
+        model_vae = load_model_state_dict(model_name, model_path, n_bands=109, data_path=data_path)
         model_vae.eval()
-        mean, log_var, _ = model_vae(input_tensor)
-        
-        # rather than using mean as latent vector, sample from the distribution, as I applied the softmax constraint on the sampled latent vector, not the mean
-        latent_vector = model_vae.sample(mean, log_var).detach().numpy()  # type: ignore
+        input_dl, _, _ = get_dataloaders(data_path=data_path)
+        latent_vecs = []
+        for batch in input_dl:
+            x = batch[0].float()
+            with torch.inference_mode():
+                mean, log_var, out = model_vae(x)
+            # rather than using mean as latent vector, sample from the distribution, as I applied the softmax constraint on the sampled latent vector, not the mean
+            latent_vecs.append(model_vae.sample(mean, log_var).detach().numpy())  # type: ignore
+        latent_vector = np.concatenate(latent_vecs, axis=0)
         # latent_vector = mean.detach().numpy()  # Use the mean as the latent vector
+    elif model_name == 'ae':
+        model_ae = load_model_state_dict(model_name, model_path, n_bands=109, data_path=data_path, em_path=em_path)
+        input_dl, _, _ = get_dataloaders(data_path=data_path, batch_size=32, test_size=0.0)
+        # print("NOTE: data path fetched from config")
+        abundance_vectors = []
+        for x in input_dl:
+            x = x[0].float()  # type: ignore # Extract the tensor from the tuple
+            with torch.inference_mode():
+                x_hat, z, E_positive = model_ae(x)
+            # print(f"Reconstruction Loss: {loss.item()}")
+            abundance_vectors.append(z.detach().numpy())
+        latent_vector = np.concatenate(abundance_vectors, axis=0)
+
     return latent_vector
 
-def get_recon_spectra(model_name: Literal['vae', 'ss-vae'], model_path: str, input_data: np.ndarray, config: Namespace) -> np.ndarray:
+def get_recon_spectra(model_name: Literal['ae', 'vae', 'ss-vae'], model_path: str, config: Namespace, data_path: str, em_path: Optional[str]=None) -> np.ndarray:
     """
     Get reconstructed spectra from a model given the input data.
 
@@ -108,12 +142,12 @@ def get_recon_spectra(model_name: Literal['vae', 'ss-vae'], model_path: str, inp
     - np.ndarray: Reconstructed spectra from the model.(H*W, n_bands)
     """
     print(">>> Running latest get_recon_spectra")
-    input_tensor = torch.from_numpy(input_data).float()
+    # input_tensor = torch.from_numpy(input_data).float()
     
     if model_name == 'ss-vae':
-        model_ss = load_model_state_dict(model_name, model_path, input_data.shape[1])
+        model_ss = load_model_state_dict(model_name, model_path, n_bands=109, data_path=data_path)
         model_ss.eval()  # Set the model to evaluation mode
-        input_dl, _ = get_dataloaders_ssvae(data_path=config.data_path, batch_size=input_data.shape[0], neighborhood_size=config.patch_size, test_size=0)
+        input_dl, _ = get_dataloaders_ssvae(data_path=config.data_path, batch_size=config.batch_size, neighborhood_size=config.patch_size, test_size=0)
         for batch in input_dl:
             x=batch.float()
             with torch.inference_mode():
@@ -121,14 +155,30 @@ def get_recon_spectra(model_name: Literal['vae', 'ss-vae'], model_path: str, inp
         if hasattr(recon, 'cpu'):
             recon = recon.cpu().numpy()  # shape: (effective_rows*effective_cols, B)
         recon_np = recon
-    else:
-        model_vae = load_model_state_dict(model_name, model_path, input_data.shape[1])
+    elif model_name == 'vae':
+        model_vae = load_model_state_dict(model_name, model_path, n_bands=109, data_path=data_path)
         model_vae.eval()
-        with torch.inference_mode():
-            _, _, recon = model_vae(input_tensor)
-        if len(recon)==2:
-            recon = recon[0] # by mistake, if vae returns a tuple of out, E_positive. Changed its fwd method to return out only now
+        input_dl, _, _ = get_dataloaders(data_path=data_path, batch_size=32, test_size=0.0)
+        for batch in input_dl:
+            x = batch[0].float()
+            with torch.inference_mode():
+                _, _, recon = model_vae(x)
+            if len(recon)==2:
+                recon = recon[0] # by mistake, if vae returns a tuple of out, E_positive. Changed its fwd method to return out only now
         print("Reconstructed spectra shape:", recon.shape)
         recon_np = recon.detach().cpu().numpy()  # shape: (rows*cols, B)
-
+    elif model_name == 'ae':
+        model_ae = load_model_state_dict(model_name, model_path, n_bands=109, data_path=data_path, em_path=em_path)
+        input_dl, _, _ = get_dataloaders(data_path=data_path, batch_size=32, test_size=0.0)
+        recon_vectors = []
+        recon_losses = []
+        for x in input_dl:
+            x = x[0].float()  # type: ignore # Extract the tensor from the tuple
+            with torch.inference_mode():
+                x_hat, z, E_positive = model_ae(x)
+            recon_loss_term = spectral_angle_distance_loss(x_hat, x)
+            recon_losses.append(recon_loss_term.item())
+            recon_vectors.append(x_hat.detach().numpy())
+        recon_np = np.concatenate(recon_vectors, axis=0)
+        print(f"Average Reconstruction Loss: {np.mean(recon_losses)}")
     return recon_np

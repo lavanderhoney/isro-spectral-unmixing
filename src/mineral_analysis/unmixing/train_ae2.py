@@ -7,7 +7,7 @@ from dimension_reduction.ss_vae.config import get_config
 from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
 from dimension_reduction.ss_vae.visualization import plot_losses
 from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacube
-from mineral_analysis.unmixing.ae import AE, spectral_angle_distance_loss, total_variation, spectral_information_divergence_loss, entropy_loss
+from mineral_analysis.unmixing.ae2 import AE2, spectral_angle_distance_loss, total_variation, spectral_information_divergence_loss, entropy_loss
 from mineral_analysis.endmember_extraction import extract_endmembers
 from tqdm import tqdm
 #%%
@@ -29,15 +29,12 @@ def main():
     n_bands = first_batch[0].shape[1]  # Number of spectral bands
     config = get_config()
     metrics = MetricsLogger()
-    # Initialize the decoder matrix E as endmembers from VCA
-    ems = np.load("/teamspace/studios/this_studio/isro-spectral-unmixing/data/vca_ch2_iir_nci_20191208T1407123802_d_img_d18.npy")
-    print(H_t.shape, wavelengths.shape, ems.shape) # type: ignore
+     # type: ignore
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = AE(
+    model = AE2(
         input_dim=n_bands,  # Number of bands
         hidden_dim=config.hidden_dim,
         latent_dim=4,
-        em_spectra=ems,
         scaling=0.8
     ).to(device)
     # model = torch.compile(model)
@@ -65,10 +62,10 @@ def main():
             
             optim.zero_grad()
            
-            x_hat, z, E_positive = model(x)
+            x_hat, z = model(x)
 
             recon_loss_term = spectral_angle_distance_loss(x_hat, x)
-            mv_loss_term = total_variation(E_positive)
+            mv_loss_term = total_variation(model.decoder_output_layer.weight) #regularize the weights of the decoder layer
             sid_loss_term = spectral_information_divergence_loss(x_hat, x)
             entropy_loss_term = entropy_loss(z)
             loss = w_recon*recon_loss_term + w_mv* mv_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term
@@ -87,7 +84,6 @@ def main():
                     "entropy": "{:.4f}".format(entropy_loss_term.item())
                 })
                 if math.isnan(loss.item()):
-                    print(E_positive)
                     print(z)
                     print(x_hat)
 
@@ -107,9 +103,9 @@ def main():
             for x in test_pbar:
                 x = x[0].float().to(device)
 
-                x_hat, z, E_positive = model(x)
+                x_hat, z = model(x)
                 recon_loss_term = spectral_angle_distance_loss(x_hat, x)
-                mv_loss_term = total_variation(E_positive)
+                mv_loss_term = total_variation(model.decoder_output_layer.weight) #regularize the weights of the decoder layer
                 sid_loss_term = spectral_information_divergence_loss(x_hat, x)
                 entropy_loss_term = entropy_loss(z)
                 loss = w_recon*recon_loss_term + w_mv* mv_loss_term + w_sid*sid_loss_term + w_ent*entropy_loss_term
@@ -157,7 +153,7 @@ if __name__ == "__main__":
         'timestamp': timestamp,
         'scaling': model.beta
     }
-    torch.save(state, f'models/model_state_ae_scaling{timestamp}.pth')
+    torch.save(state, f'models/model_ae2_{timestamp}.pth')
     print("Best model saved to 'models'.")
     # plot_losses(metrics, "ae_loss_plots")
 # %%
