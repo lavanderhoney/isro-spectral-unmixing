@@ -6,8 +6,8 @@ from time import sleep
 from dimension_reduction.ss_vae.config import get_config
 from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
 from dimension_reduction.ss_vae.visualization import plot_losses
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacube
-from mineral_analysis.unmixing.ae2 import AE2, spectral_angle_distance_loss, total_variation, spectral_information_divergence_loss, entropy_loss
+from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacube, samson_dataloader
+from mineral_analysis.unmixing.ae2 import AE2, spectral_angle_distance_loss, spectral_information_divergence_loss, mse_loss
 from mineral_analysis.endmember_extraction import extract_endmembers
 from tqdm import tqdm
 #%%
@@ -19,27 +19,29 @@ def main():
     # torch.autograd.set_detect_anomaly(True)
 
     # Load and preprocess the reflectance data
-    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz' #the denoised image
-    # refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_m3g20090729t104424_v01_rfl.npz' #downlaoded from iirs pipeline process notebook
-    train_dl, test_dl, wavelengths = get_dataloaders(refl_cube_path)
-    H, wavelengths = open_datacube(refl_cube_path)
-    H_t = H.transpose(1, 2, 0)  #(H, W, bands)
-    # Get a batch to determine the number of spectral bands
-    first_batch = next(iter(train_dl))
-    n_bands = first_batch[0].shape[1]  # Number of spectral bands
+    # refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz' #the denoised image
+    # # refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_m3g20090729t104424_v01_rfl.npz' #downlaoded from iirs pipeline process notebook
+    # train_dl, test_dl, wavelengths = get_dataloaders(refl_cube_path)
+    # H, wavelengths = open_datacube(refl_cube_path)
+    # H_t = H.transpose(1, 2, 0)  #(H, W, bands)
+    # # Get a batch to determine the number of spectral bands
+    # first_batch = next(iter(train_dl))
+    # n_bands = first_batch[0].shape[1]  # Number of spectral bands
     config = get_config()
+    train_dl, test_dl = samson_dataloader(data_path="/teamspace/studios/this_studio/isro-spectral-unmixing/data/samson_data.npz", batch_size=20, test_size=0.1)
+    samson_bands = 156
+    samson_ems = 3
     metrics = MetricsLogger()
      # type: ignore
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = AE2(
-        input_dim=n_bands,  # Number of bands
-        hidden_dim=config.hidden_dim,
-        latent_dim=4,
-        scaling=0.8
+        input_dim=samson_bands,  # Number of bands
+        hidden_dim=64,  # Hidden layer size
+        latent_dim=samson_ems,  # Number of endmembers
     ).to(device)
     # model = torch.compile(model)
-    optim = torch.optim.Adam(model.parameters(), lr=config.lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, patience=config.scheduler_patience, threshold=0.01)
+    optim = torch.optim.Adam(model.parameters(), lr=1e-3)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, patience=3, threshold=0.01)
     patience_cntr = 0
     best_model_state = None
     best_test_loss = float('inf')
@@ -47,10 +49,11 @@ def main():
     # print("Initial E: ")
     # print(model.E)
 
-    print("The Training Begins !")
+    print("The AE2 Training Begins !")
     sleep(0.5)
 
     w_recon, w_mv, w_sid, w_ent = 1, 1, 1, 0 # Weights for the losses
+    config.epochs = 50
     for epoch in range(config.epochs):
         metrics.reset_epoch()
 
@@ -58,42 +61,34 @@ def main():
         model.train()
         train_pbar = tqdm(train_dl, total=len(train_dl), desc=f"Epoch {epoch+1}/{config.epochs} [Train]")
         for i, x in enumerate(train_pbar):
-            x = x[0].float().to(device)  # Extract the tensor from the tuple
-            
-            optim.zero_grad()
-           
+            x = x[0].float().to(device)  # Extract the tensor from the tuple           
             x_hat, z = model(x)
 
-            recon_loss_term = spectral_angle_distance_loss(x_hat, x)
-            mv_loss_term = total_variation(model.decoder_output_layer.weight) #regularize the weights of the decoder layer
+            # recon_loss_term = spectral_angle_distance_loss(x_hat, x)
+            recon_loss_term = mse_loss(x_hat, x)
+            # mv_loss_term = total_variation(model.decoder_output_layer.weight) #regularize the weights of the decoder layer
             sid_loss_term = spectral_information_divergence_loss(x_hat, x)
-            entropy_loss_term = entropy_loss(z)
-            loss = w_recon*recon_loss_term + w_mv* mv_loss_term + w_sid*sid_loss_term - w_ent*entropy_loss_term
-
+            # entropy_loss_term = entropy_loss(z)
+            loss = w_recon*recon_loss_term + w_sid*sid_loss_term 
+            optim.zero_grad()
             loss.backward()
             optim.step()
 
-            metrics.update(phase='train', total=loss.item(), recon=recon_loss_term.item(), mv=mv_loss_term.item(), sid=sid_loss_term.item(), homology=entropy_loss_term.item()) # store entropy in metrics under homology as surrogate
+            metrics.update(phase='train', total=loss.item(), recon=recon_loss_term.item(), sid=sid_loss_term.item()) # store entropy in metrics under homology as surrogate
 
             if i % config.update_interval == 0:
                 train_pbar.set_postfix({
                     "loss": "{:.5f}".format(loss.item()),
                     "reconstruction": "{:.4f}".format(recon_loss_term.item()),
-                    "total_variation": "{:.4f}".format(mv_loss_term.item()),
+                    # "total_variation": "{:.4f}".format(mv_loss_term.item()),
                     "sid_loss": "{:.4f}".format(sid_loss_term.item()),
-                    "entropy": "{:.4f}".format(entropy_loss_term.item())
                 })
                 if math.isnan(loss.item()):
                     print(z)
                     print(x_hat)
-
-                    for name, param in model.named_parameters():
-                        if torch.isnan(param).any():
-                            print(f"Parameter {name} has NaN values.")
-                    
-                    print("Param gradients:")
-                    for name, param in model.named_parameters():
-                        print(f"{name}: {param.shape} - {param.grad}")
+                    print(x)  
+                    print("SID: ", sid_loss_term)
+                    print("RECON: ", recon_loss_term)
                     raise ValueError("Loss went to nan.")
             avg_train_loss = metrics.finalize_epoch('train')
         # EVALUATION
@@ -104,19 +99,19 @@ def main():
                 x = x[0].float().to(device)
 
                 x_hat, z = model(x)
-                recon_loss_term = spectral_angle_distance_loss(x_hat, x)
-                mv_loss_term = total_variation(model.decoder_output_layer.weight) #regularize the weights of the decoder layer
+                # recon_loss_term = spectral_angle_distance_loss(x_hat, x)
+                recon_loss_term = mse_loss(x_hat, x)
+                # mv_loss_term = total_variation(model.decoder_output_layer.weight) #regularize the weights of the decoder layer
                 sid_loss_term = spectral_information_divergence_loss(x_hat, x)
-                entropy_loss_term = entropy_loss(z)
-                loss = w_recon*recon_loss_term + w_mv* mv_loss_term + w_sid*sid_loss_term + w_ent*entropy_loss_term
+                # entropy_loss_term = entropy_loss(z)
+                loss = w_recon*recon_loss_term + w_sid*sid_loss_term
 
-                metrics.update(phase='val', total=loss.item(), recon=recon_loss_term.item(), mv=mv_loss_term.item(), sid=sid_loss_term.item(), homology=entropy_loss_term.item())  # store entropy in metrics under homology as surrogate
+                metrics.update(phase='val', total=loss.item(), recon=recon_loss_term.item(), sid=sid_loss_term.item())  # store entropy in metrics under homology as surrogate
                 test_pbar.set_postfix({
                     "loss": "{:.5f}".format(loss.item()),
                     "reconstruction": "{:.4f}".format(recon_loss_term.item()),
-                    "total_variation": "{:.4f}".format(mv_loss_term.item()),
+                    # "total_variation": "{:.4f}".format(mv_loss_term.item()),
                     "sid_loss": "{:.4f}".format(sid_loss_term.item()),
-                    "entropy": "{:.4f}".format(entropy_loss_term.item())
                 })
 
 
@@ -131,7 +126,7 @@ def main():
         else:
             patience_cntr += 1
 
-        if patience_cntr >= config.early_stop:
+        if patience_cntr >= 20:
             print(f"Early stopping at epoch {epoch+1}")
             break
     # plot_losses(metrics, "ae_loss_plots")

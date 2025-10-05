@@ -18,6 +18,29 @@ Apparently, normalizing the data is messing with the spectra and the overall dis
 But min-max is still fine
 """
 
+def samson_dataloader(data_path: str, batch_size: int = 32, test_size: float = 0.1,) -> Tuple[DataLoader, DataLoader]:
+    """
+    Dataloader for the Samson dataset. Opens the data, splits into train and test sets, and returns dataloaders.
+    """
+    cube = np.load(data_path)['cube']  # shape (H, W, B)
+    cube = (cube - cube.min()) / (cube.max() - cube.min())
+
+    H, W, B = cube.shape
+    cube_t = np.moveaxis(cube, 2, 0)  # shape (B, H, W)
+    X_flat = cube_t.reshape(H*W, B)
+    if test_size == 0.0:  # used for inference, so no split
+        X_flat_train, X_flat_test = X_flat, X_flat
+    else:
+        X_flat_train, X_flat_test = train_test_split(X_flat, test_size=test_size, shuffle=False)
+
+    train_dataset = TensorDataset(torch.from_numpy(X_flat_train))
+    test_dataset = TensorDataset(torch.from_numpy(X_flat_test))
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    return train_loader, test_loader
+
 def open_datacube(data_path: str) -> Tuple[np.ndarray, np.ndarray|None]:
     """
     Opens the data cube from the given path and returns the reflectance data and wavelengths.
@@ -126,11 +149,11 @@ def get_dataloaders(data_path: str,
     The input datacube is NOT transposed, and its shape should be (B, H, W) where B is the number of bands, H is height, and W is width.
     """
     refl_data, wavelengths = open_datacube(data_path)
-    print("refl_data shape in get_dataloaders:", refl_data.shape) 
+    # print("refl_data shape in get_dataloaders:", refl_data.shape) 
     
     if refl_data.shape[2] != 109: # check if bands are in last dimension
         H_t = np.moveaxis(refl_data, 0, 2)
-        print("H_t shape in get_dataloaders:", H_t.shape)  # (H, W, B)
+        # print("H_t shape in get_dataloaders:", H_t.shape)  # (H, W, B)
     else:
         raise ValueError("The input data cube should be in shape (B, H, W)")
     rows, cols, bands = H_t.shape

@@ -15,13 +15,11 @@ from sklearn.preprocessing import StandardScaler
 #%%
 def show_recon_image(
     model_name: Literal['vae', 'ss-vae'],
-    model_path: str,
     input_data: np.ndarray,
     rows: int,
     cols: int,
+    recon_np: np.ndarray,
     n_samples: int = 3,
-    data_path: Optional[str] = None,
-    recon_np: Optional[np.ndarray] = None,
 ) -> None:
     """
     Show reconstructed images from the model given the input data, and compute SAM.
@@ -37,15 +35,6 @@ def show_recon_image(
 
     print(">>> Running show_recon_image with updated plotting")
     band_index = 30  # spectral band to visualize
-
-    if not isinstance(recon_np, np.ndarray):
-        # get the reconstructed spectra/image
-        recon_np = get_recon_spectra(
-            model_name=model_name,
-            model_path=model_path,
-            config=get_config(),
-            data_path=data_path, # type: ignore
-        )
 
     # Reshape input for plotting
     print("Input data shape:", input_data.shape)
@@ -142,9 +131,9 @@ def extract_endmembers_from_latent(latent_vectors: np.ndarray, wavelengths: np.n
     return endmembers  # Return only the endmembers
     
 if __name__ == "__main__":
-    data_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz"
-    ss_vae_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_ss_vae_0731_070802.pth"
-    vae_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_vae_unmix_0724_102754.pth"
+    data_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20210620T2110364457_d_img_hw1 (1).npz"
+    model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_state_vae_unmix_0724_102754.pth"
+    em_path = None
 
     data = np.load(data_path)
     data_cube = data['den_refl_data']
@@ -158,7 +147,7 @@ if __name__ == "__main__":
     H_t = data_cube.transpose(1, 2, 0) # Transpose to (rows, cols, bands)
     input_data = H_t.reshape(-1, n_bands) # Reshape to (H*W, n_bands)
 
-    configs = get_config()
+    config = get_config()
     # latent_vectors = extract_latent_vectors('vae', vae_path, input_data, config=configs)
     # print("Latent vectors shape:", latent_vectors.shape) # (H*W, latent_dim)
     # amaps = latent_vectors.reshape(rows, cols, -1)  # Reshape to (rows, cols, latent_dim)
@@ -166,12 +155,12 @@ if __name__ == "__main__":
     # eea.plot_amaps(amaps, H_t, wavelengths, "VAE", target_wl=750)
     
     #SS-VAE
-    latent_vectors = extract_latent_vectors('ss-vae', ss_vae_path, input_data, data_path=data_path)
-    print("Latent vectors shape:", latent_vectors.shape) # (H*W, latent_dim)
-    ss_rows, ss_cols = 997, 246  # because ss-vae is trained on a center-cropped image, and ignores border because of the lstm or cnn part
-    amaps = latent_vectors.reshape(ss_rows, ss_cols, -1)  # Reshape to (rows, cols, latent_dim)
-    print("amaps of SS-VAE: ", amaps.shape)
-    eea.plot_amaps(amaps, H_t, wavelengths, "SS-VAE", target_wl=750)
+    # latent_vectors = extract_latent_vectors('ss-vae', ss_vae_path, input_data, data_path=data_path)
+    # print("Latent vectors shape:", latent_vectors.shape) # (H*W, latent_dim)
+    # ss_rows, ss_cols = 997, 246  # because ss-vae is trained on a center-cropped image, and ignores border because of the lstm or cnn part
+    # amaps = latent_vectors.reshape(ss_rows, ss_cols, -1)  # Reshape to (rows, cols, latent_dim)
+    # print("amaps of SS-VAE: ", amaps.shape)
+    # eea.plot_amaps(amaps, H_t, wavelengths, "SS-VAE", target_wl=750)
     #Display amaps of latent vectors
     
     # Extract endmembers from the latent vectors
@@ -181,13 +170,9 @@ if __name__ == "__main__":
     
     # Model's sanity check
     # print("Now with normalized input data")
-    show_recon_image('ss-vae', ss_vae_path, input_data, rows, cols, n_samples=3)
-    # show_recon_image('vae', vae_path, input_data,rows, cols, n_samples=3)
+    recon_vectors = get_recon_spectra('vae', model_path=model_path, config=config, data_path=data_path, em_path=em_path)
 
-    # print("Unmixing AE check")
-    # model_path = "/teamspace/studios/this_studio/isro-spectral-unmixing/src/models/model_M3_state_ae_scaling0713_123502.pth"
-    # from mineral_analysis.unmixing.analyse_ae import recon_np
-    # #%%
-    # show_recon_image('vae', model_path, H_t.reshape(-1, n_bands), H_t.shape[0], H_t.shape[1], 5, recon_np)
+    show_recon_image('vae', input_data, rows, cols, recon_vectors, n_samples=5) # same for vae and ae
+
 
 # %%

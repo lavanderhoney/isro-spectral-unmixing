@@ -84,12 +84,18 @@ class AE(nn.Module):
         return x_hat, z, E_positive
 
 #loss functions
+def mse_loss(x_hat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    return F.mse_loss(x_hat, x)
+
 def spectral_angle_distance_loss(x_hat: torch.Tensor, x: torch.Tensor, eps:float = 1e-8) -> torch.Tensor:
     # assert not torch.isnan(x_hat).any(), "NaN in x_hat"
     # assert not torch.isnan(x).any(), "NaN in x"
 
     # x_hat, x = F.softplus(x_hat), F.softplus(x)  # Ensure non-negativity
-
+    """
+    From:  Image Processing and Machine Learning for
+ Hyperspectral Unmixing: An Overview and the
+    """
     cos_theta = F.cosine_similarity(x_hat, x, dim=1, eps=eps)  # Compute cosine similarity
     # Safe clamp away from ±1 to avoid infinite gradients in acos
     cos_theta = torch.clamp(cos_theta, -1.0 + 1e-4, 1.0 + 1e-4)
@@ -104,6 +110,9 @@ def spectral_information_divergence_loss(x_hat: torch.Tensor, x: torch.Tensor, e
 
     where p and q are normalized versions of x and x_hat, and D_KL is the
     Kullback-Leibler divergence.
+    From: " Image Processing and Machine Learning for
+ Hyperspectral Unmixing: An Overview and the
+ HySUPP Python Package"
 
     Args:
         x_hat (torch.Tensor): Reconstructed spectra, shape (batch_size, num_bands).
