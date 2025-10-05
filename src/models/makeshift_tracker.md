@@ -1,12 +1,80 @@
 - **model_state_ae_scaling0701_050635.pth**
-    - for data: den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz
+    - for data: (Image 1)den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz
     - THE SUCCESSFUL MODEL
     - model with Batch Normalization layers after each Linear layer in the encoder.
     - 109,64,32,16,4 architecture.
     - 3 linear layers
     - softmax constraints, scaling=0.8 (default)
-    - avg recon: 0.01547, 
     - silhouette: 0.7976 (on amaps), silhouette on original: 0.76
+    - avg recon: 0.01547, 
+    - Average Entropy Loss: 0.68
+    - Average SID Loss: 0.00025
+
+- **model_state_ae_scaling1003_091045.pth**
+    - Image: 20214457 (Image 2)
+    - Average SID Loss: 8.043793858629709e-05
+    - Average Reconstruction Loss: 0.0086
+    - Average Entropy Loss: 0.86
+    - kmeans silhoutte: 0.62(on amaps), 0.726(on original)
+
+- **model_state_ae_scaling0920_180122.pth**
+    - SUCCESSFUL MODEL for data : (Image 3)den_reflectance_ch2_iir_nci_20211214T2146149094_d_img_hw1.npz
+    - model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - softmax constraints, scaling=1.1
+    - silhouette: 0.815 (on amaps), silhouette on original: 0.91
+    - avg recon: 0.0327, 
+    - Average Entropy Loss: 0.45
+    - Average SID Loss: 0.0013
+
+- **model_state_ae_scaling0920_185943.pth**
+    - SUCCESSFUL MODEL for data : (Image 4)den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz
+    - model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - softmax constraints, scaling=1
+    - silhouette: 0.90 (on amaps), silhouette on original: 0.77
+    - gmm og silhouette: 0.13, latent vectors 0.53
+    - avg recon: 0.036, 
+    - Average Entropy Loss: 0.25
+    - Average SID Loss: 0.0016
+
+- **model_state_vae_unmix_0724_102754.pth**
+    - SUCCESSFUL MODEL for data : den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz
+    - VAE model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - softmax constraints, scaling=1
+    - silhouette: 0.65 (on amaps), silhouette on original: 0.76
+    - gmm og silhouette: 0.22, latent vectors 0.32    
+    - avg recon: 0.03, 
+    - Average Entropy Loss: 1.3
+    - Average SID Loss: 0.009
+- **src/models/model_state_vae_unmix_1004_165825.pth**
+    - Data ch2_iir_20193802 (Image 4)
+        - kmeans silhoutte: 0.65(on amaps), 0.77 (on original)
+        - recon loss: 0.052
+        - Average SID Loss: 0.0036
+        - Average Entropy Loss: 1.3
+
+- **src/models/model_state_vae_unmix_1003_102654.pth**
+    - Data ch2_iir_2021_4457 (Image 2)
+        - kmeans silhoutte: 0.58(on amaps), 0.726(on original)
+        - recon loss: 0.0219
+        - Average Entropy Loss: 1.318
+        - Average SID Loss: 0.00065
+- **src/models/model_state_vae_unmix_1003_120824.pth**
+    - Data 202149094 (Image 3)
+        - kmeans silhoutte: 0.65(on amaps), 0.81 (on original)
+        - Average Entropy Loss: 1.32
+        - Average SID Loss: 0.0089
+        - Average Reconstruction Loss: 0.085
+- **model_state_ae_scaling0701_055120.pth**
+    - model with Batch Normalization layers after each Linear layer in the encoder.
+    - 109,64,32,16,4 architecture.
+    - 3 linear layers
+    - for data: den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz
 
 - **model_state_ae_scaling0713_113510.pth**
     - SUCCESSFUL MODEL for data: den_georef_ch2_iir_nci_20210620T2110364457_d_img_hw1.npz
@@ -14,32 +82,8 @@
     - 109,64,32,16,4 architecture.
     - 3 linear layers
     - softmax constraints, scaling=0.8
-    - avg recon: 0.0334, 
     - silhouette: 0.77 (on amaps), silhouette on original: 0.76
     - gmm og silhouette: 0.01, latent vectors 0.11
-
-- **model_state_ae_scaling0920_180122.pth**
-    - SUCCESSFUL MODEL for data : den_reflectance_ch2_iir_nci_20211214T2146149094_d_img_hw1.npz
-    - model with Batch Normalization layers after each Linear layer in the encoder.
-    - 109,64,32,16,4 architecture.
-    - 3 linear layers
-    - softmax constraints, scaling=1.1
-    - avg recon: 0.0327, 
-    - silhouette: 0.815 (on amaps), silhouette on original: 0.91
-    - gmm og silhouette: 0.24, latent vectors 0.49
-
-- **model_state_ae_scaling0920_185943.pth**
-    - SUCCESSFUL MODEL for data : den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz
-    - model with Batch Normalization layers after each Linear layer in the encoder.
-    - 109,64,32,16,4 architecture.
-    - 3 linear layers
-    - softmax constraints, scaling=1
-    - avg recon: 0.036, 
-    - silhouette: 0.90 (on amaps), silhouette on original: 0.77
-    - gmm og silhouette: 0.13, latent vectors 0.53
-    
-- **model_state_ae_scaling0701_055120.pth**
-    - model with Batch Normalization layers after each Linear layer in the encoder.
-    - 109,64,32,16,4 architecture.
-    - 3 linear layers
-    - for data: den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz
+    - avg recon: 0.0334, 
+    - Average Entropy Loss: 0.64
+    - Average SID Loss: 0.00107
