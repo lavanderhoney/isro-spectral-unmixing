@@ -96,7 +96,7 @@ def plot_amaps(abundance_map, H_t, wavelengths, ea, target_wl=750):
     
 
 def extract_endmembers(H_t: np.ndarray, 
-                       wavelengths: np.ndarray|None, 
+                       wavelengths: np.ndarray, 
                        algorithm: Literal['nfindr', 'vca', 'fippi', 'atgp'],
                        n_endmembers: int = 5, 
                        show_endmembers: bool = True,
@@ -130,6 +130,8 @@ def extract_endmembers(H_t: np.ndarray,
         return em_nfindr, amap_nfindr if show_amaps else em_nfindr
 
     elif algorithm == 'vca':
+        if wavelengths is None:
+            raise ValueError("Wavelengths must be provided for VCA algorithm.")
         image = rp.SpectralImage(H_t, spectral_axis=wavelengths)
         vca = rp.analysis.unmix.VCA(n_endmembers=n_endmembers, abundance_method='fcls')
         abundance_maps_vca, em_vca = vca.apply(image)
