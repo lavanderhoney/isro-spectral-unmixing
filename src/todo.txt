@@ -1,0 +1,14 @@
+-> Two stage training with manual constraints   
+    -> debug the nan grad thing by backprop of individual loss terms (as suggested by chatgpt)
+    -> check the sid and tv loss implementation
+    -> i really doubt the decoder, becuz, when it was frozen, there were no nan grads
+    -> Write this in weekly report (so it serves a ref to me)
+
+-> Single stage training with scaled softie
+    -> 1.25 is best for now, 1.5 is too much, so try with 1.3
+    -> but the abundance map with 1.25 is more detailed than fcls, and it shows 3 ems, while in fcls, if look closely there's actually only 2
+        -> also check: why are the maps for the ems segmented? i.e, the maps for the ems don't overlap. If the image was an intimate, non-linear 
+        mixture, they would have overlapping maps, but i guess its not becuz we are using a LMM?
+
+-> Extend this AE to non-linear MM: by adding the non-linear layer after decoder, and do same for blind =
+

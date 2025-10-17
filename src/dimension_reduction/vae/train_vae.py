@@ -16,7 +16,7 @@ def main():
     It loads the data, preprocesses it, initializes the model, and runs the training loop.
     """
     # Load and preprocess the reflectance data
-    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T0814159609_d_img_d18.npz' #the denoised image
+    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz'
     train_dl, test_dl, wavelengths = get_dataloaders(refl_cube_path)
     H, wavelengths = open_datacube(refl_cube_path)
     H_t = H.transpose(1, 2, 0)  
@@ -87,6 +87,7 @@ def main():
                     "sid_loss": "{:.4f}".format(sid_loss_term.item()),
                     "entropy": "{:.4f}".format(entropy_loss_term.item())
                 })
+        avg_train_loss = metrics.finalize_epoch('train')
 
         # EVALUATION
         model.eval()
@@ -148,7 +149,7 @@ if __name__ == "__main__":
         'model_state': model.state_dict(),
         'metrics': metrics,
         'config': get_config(),
-        'timestamp': timestamp
+        'timestamp': timestamp,
     }
     torch.save(state, f'models/model_state_vae_unmix_{timestamp}.pth')
     print("Best model saved to 'models'.")

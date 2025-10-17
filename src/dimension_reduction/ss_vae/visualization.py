@@ -8,8 +8,8 @@ def plot_losses(metrics, save_path="src/dimension_reduction/ss_vae/training_runs
     loss_types += reg
     
     print("Metrics: ", metrics.history.keys())
-    print(metrics.history['train'])
-    print(metrics.history['val'])
+    # print(metrics.history['train'])
+    # print(metrics.history['val'])
     fig, axs = plt.subplots(3, 3, figsize=(15, 10))
     axs = axs.flatten()
     

@@ -1,5 +1,6 @@
 #%%
 import numpy as np
+from scipy.__config__ import show
 import torch
 import math
 from time import sleep
@@ -19,7 +20,7 @@ def main():
     # torch.autograd.set_detect_anomaly(True)
 
     # Load and preprocess the reflectance data
-    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20191208T1407123802_d_img_d18.npz' #the denoised image
+    refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20210620T2110364457_d_img_hw1 (1).npz' #the denoised image
     # refl_cube_path = '/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_georef_m3g20090729t104424_v01_rfl.npz' #downlaoded from iirs pipeline process notebook
     train_dl, test_dl, wavelengths = get_dataloaders(refl_cube_path)
     H, wavelengths = open_datacube(refl_cube_path)
@@ -30,8 +31,10 @@ def main():
     config = get_config()
     metrics = MetricsLogger()
     # Initialize the decoder matrix E as endmembers from VCA
-    ems = np.load("/teamspace/studios/this_studio/isro-spectral-unmixing/data/vca_ch2_iir_nci_20191208T1407123802_d_img_d18.npy")
+    # ems = np.load("/teamspace/studios/this_studio/isro-spectral-unmixing/data/vca_ch2_iir_nci_20191208T1407123802_d_img_d18.npy")
+    ems, amaps = extract_endmembers(H_t, wavelengths, algorithm='vca', n_endmembers=4, show_endmembers=False, show_amaps=False)
     print(H_t.shape, wavelengths.shape, ems.shape) # type: ignore
+    print("VCA Done")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = AE(
         input_dim=n_bands,  # Number of bands
