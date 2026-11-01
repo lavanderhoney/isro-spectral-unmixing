@@ -1,12 +1,12 @@
 from time import sleep
 from typing import Tuple
 from dimension_reduction.ss_vae.config import get_config # import config from the same directory
-from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
+from utils.metrics_logger import MetricsLogger
 from dimension_reduction.ss_vae.spatial_spectral_vae import SpatialSpectralNet
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders_ssvae
-from dimension_reduction.ss_vae.visualization import plot_losses
-from dimension_reduction.ss_vae.utils import extract_spectral_data
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacube
+from utils.dataloaders import get_dataloaders_ssvae
+from utils.visualization import plot_losses
+from dimension_reduction.ss_vae.ss_vae_utils import extract_spectral_data
+from utils.dataloaders import get_dataloaders, open_datacube
 from mineral_analysis.endmember_extraction import extract_endmembers
 from mineral_analysis.unmixing.ae import spectral_angle_distance_loss, spectral_information_divergence_loss, entropy_loss
 from tqdm import tqdm

@@ -13,8 +13,8 @@ from sklearn.mixture import GaussianMixture
 from matplotlib import colors as mcolors
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
-from dimension_reduction.inference_utils import extract_latent_vectors
-from dimension_reduction.ss_vae.dataloaders import open_datacube
+from utils.inference_utils import extract_latent_vectors
+from utils.dataloaders import open_datacube
 import argparse
 # import matplotlib
 # matplotlib.use('TkAgg')

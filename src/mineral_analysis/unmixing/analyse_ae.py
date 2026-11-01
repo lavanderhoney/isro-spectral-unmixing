@@ -2,10 +2,10 @@
 import torch
 import torch.nn as nn
 from typing import Tuple, List
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacube
+from utils.dataloaders import get_dataloaders, open_datacube
 from mineral_analysis.unmixing.ae2 import AE2, spectral_angle_distance_loss
 from mineral_analysis import endmember_extraction as eea
-from dimension_reduction.inference_utils import extract_latent_vectors, get_recon_spectra, load_model_state_dict
+from utils.inference_utils import extract_latent_vectors, get_recon_spectra, load_model_state_dict
 from dimension_reduction.ss_vae import config
 from mineral_analysis.clustering.clustering_funcs import kmeans_clustering, gmm_clustering, plot_and_eval
 from matplotlib import pyplot as plt

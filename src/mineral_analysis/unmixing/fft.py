@@ -8,10 +8,10 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 
 #%%
 try:
-	from src.dimension_reduction.ss_vae.dataloaders import open_datacube
+	from src.utils.dataloaders import open_datacube
 except Exception:
 	# Fallback import path if used as a package module
-	from dimension_reduction.ss_vae.dataloaders import open_datacube
+	from utils.dataloaders import open_datacube
 
 
 def spectral_fft_features(H: np.ndarray, keep: int = 16) -> np.ndarray:

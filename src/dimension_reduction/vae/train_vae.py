@@ -2,9 +2,9 @@ import numpy as np
 import torch
 from time import sleep
 from dimension_reduction.ss_vae.config import get_config
-from dimension_reduction.ss_vae.metrics_logger import MetricsLogger
-from dimension_reduction.ss_vae.visualization import plot_losses
-from dimension_reduction.ss_vae.dataloaders import get_dataloaders, open_datacube
+from utils.metrics_logger import MetricsLogger
+from utils.visualization import plot_losses
+from utils.dataloaders import get_dataloaders, open_datacube
 from .vae import VAE
 from mineral_analysis.unmixing.ae import spectral_angle_distance_loss, spectral_information_divergence_loss, entropy_loss
 from mineral_analysis.endmember_extraction import extract_endmembers

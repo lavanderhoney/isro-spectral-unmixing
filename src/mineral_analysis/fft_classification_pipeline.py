@@ -5,8 +5,8 @@ Integration script to extract endmembers using FFT method and classify them usin
 import numpy as np
 from mineral_analysis.unmixing.fft import extract_endmembers_fft, plot_endmembers, plot_cluster_map
 from mineral_analysis.endmember_extraction import extract_endmembers
-from mineral_analysis.classification.spectral_cnn import load_model_and_predict
-from dimension_reduction.ss_vae.dataloaders import open_datacube
+from mineral_analysis.classification.classification_models import load_model_and_predict
+from utils.dataloaders import open_datacube
 
 def run_fft_classification_pipeline(em_extract_method:str, data_path: str, model_path: str = None, train_model: bool = True, n_endmembers: int = 4):
     """
@@ -79,28 +79,11 @@ if __name__ == "__main__":
                       "/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20210620T2110364457_d_img_hw1 (1).npz",
                       "/teamspace/studios/this_studio/isro-spectral-unmixing/data/den_reflectance_ch2_iir_nci_20211214T2146149094_d_img_hw1.npz"
                       ]
-    # for i, path in enumerate(all_data_paths):
-    #     print("\n" + "="*80)
-    #     print(f"{i+1}. {path}")
-    #     results = run_fft_classification_pipeline(
-    #         em_extract_method="fft",
-    #         data_path=path,
-    #         model_path="/teamspace/studios/this_studio/isro-spectral-unmixing/models/SpectralCNN.pth",
-    #         train_model=False,  # Set to False if you have a pre-trained model
-    #         n_endmembers=4
-    #     )
-    
-    #     endmembers, label_map, pred_classes, probabilities, mineral_mapping = results
-
-    # print("\nPipeline completed successfully with FFT!")
-        
-    print("\n\n" + "="*80 + "\n\n")
-    print("Now running VCA + CNN pipeline...\n")
     for i, path in enumerate(all_data_paths):
         print("\n" + "="*80)
         print(f"{i+1}. {path}")
         results = run_fft_classification_pipeline(
-            em_extract_method="vca",
+            em_extract_method="fft",
             data_path=path,
             model_path="/teamspace/studios/this_studio/isro-spectral-unmixing/models/SpectralCNN.pth",
             train_model=False,  # Set to False if you have a pre-trained model
@@ -109,5 +92,22 @@ if __name__ == "__main__":
     
         endmembers, label_map, pred_classes, probabilities, mineral_mapping = results
 
-        print("\nPipeline completed successfully with VCA!")
+    print("\nPipeline completed successfully with FFT!")
+        
+    # print("\n\n" + "="*80 + "\n\n")
+    # print("Now running VCA + CNN pipeline...\n")
+    # for i, path in enumerate(all_data_paths):
+    #     print("\n" + "="*80)
+    #     print(f"{i+1}. {path}")
+    #     results = run_fft_classification_pipeline(
+    #         em_extract_method="vca",
+    #         data_path=path,
+    #         model_path="/teamspace/studios/this_studio/isro-spectral-unmixing/models/SpectralCNN.pth",
+    #         train_model=False,  # Set to False if you have a pre-trained model
+    #         n_endmembers=4
+    #     )
+    
+    #     endmembers, label_map, pred_classes, probabilities, mineral_mapping = results
+
+    #     print("\nPipeline completed successfully with VCA!")
 #%%
